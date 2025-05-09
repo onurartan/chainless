@@ -1,0 +1,58 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Chainless",
+  "colors": {
+    "primary": "#8EF0F5",
+    "light": "#DFFBFF",
+    "dark": "#0B1214"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Get Started",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "installation", "quickstart"]
+          },
+          {
+            "group": "Concepts",
+            "pages": ["concepts/taskflow", "concepts/agent", "concepts/tool"]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Basics",
+            "pages": ["examples/first_agent", "examples/research_report_flow"]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "appearance": {
+    "default": "dark",
+    "strict": false
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/onurartan/chainless"
+    }
+  },
+  "footer": {
+    "socials": {
+      "x": "https://x.com/_onurartan",
+      "github": "https://github.com/onurartan",
+      "linkedin": "https://www.linkedin.com/in/onurartan"
+    }
+  }
+}

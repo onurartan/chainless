@@ -1,0 +1,246 @@
+---
+title: "Research & Report Flow"
+description: "Build a multi-agent TaskFlow with Tool, Agent, AgentProtocol, and custom behavior."
+icon: "2"
+---
+
+## 📘 Overview
+
+This intermediate tutorial demonstrates how to:
+
+- Define multiple agent types (class-based, decorator-based)
+- Use tools for data retrieval
+- Use `custom_start` to override agent logic
+- Orchestrate them in a flow using `TaskFlow`
+
+In this flow, a user input goes through three stages:
+
+1. **ResearchAgent** fetches content
+2. **SummarizerAgent** condenses it
+3. **ReporterAgent** formats the result as a final report
+
+---
+
+## 📦 File Structure
+
+```
+research_flow.py
+```
+
+---
+
+## 🔧 Step 1 — Define a Tool
+
+```python
+from chainless import Tool
+
+def mock_web_search(query: str) -> str:
+    return f"[MOCK] Web search results for: '{query}'"
+
+web_tool = Tool(
+    name="WebSearch",
+    description="Searches the web for information on a given topic.",
+    func=mock_web_search
+)
+```
+
+---
+
+## 🧠 Step 2 — ResearchAgent (Custom Start)
+
+This agent uses the web tool and formats the tool result into a paragraph.
+
+```python
+from chainless import Agent
+from langchain_deepseek import ChatDeepSeek
+
+llm = ChatDeepSeek(model="deepseek-chat")
+
+research_agent = Agent(
+    name="ResearchAgent",
+    llm=llm,
+    tools=[web_tool],
+    system_prompt="You're a research assistant. Use the WebSearch tool if needed."
+)
+
+@research_agent.custom_start
+def run_research(input: str, tools, llm, system_prompt):
+    tool_result = tools[0].execute({"query": input})
+    prompt = f"{system_prompt}nnTopic: {input}nnTool Output: {tool_result}nnWrite a research paragraph."
+    return llm.invoke(prompt)
+```
+
+---
+
+## 🧾 Step 3 — SummarizerAgent (Standard)
+
+```python
+summarizer_agent = Agent(
+    name="SummarizerAgent",
+    llm=llm,
+    system_prompt="Summarize the given research in a concise paragraph."
+)
+```
+
+---
+
+## 📤 Step 4 — ReporterAgent (AgentProtocol)
+
+This agent implements `AgentProtocol` and formats output as an email.
+
+```python
+class ReporterAgent:
+    name = "ReporterAgent"
+
+    def start(self, input: str, **kwargs):
+        return {
+            "output": f"Subject: Weekly Research ReportnnDear Reader,nn{input}nnBest regards,nYour AI Assistant"
+        }
+```
+
+---
+
+
+## 🔗 Step 5 — TaskFlow Assembly
+
+```python
+from chainless import TaskFlow
+
+flow = TaskFlow(name="ResearchReportFlow")
+
+# Add agents
+flow.add_agent("research", research_agent)
+flow.add_agent("summarize", summarizer_agent)
+flow.add_agent("report", ReporterAgent())
+
+# Define steps
+flow.step("research", {"input": "{{input}}"})
+flow.step("summarize", {"input": "{{research.output}}"})
+flow.step("report", {"input": "{{summarize.output}}"})
+
+# Run
+result = flow.run("The impact of AI in modern education")
+print(result["output"])
+```
+
+---
+
+## ✅ Output Sample
+
+```
+Subject: AI Weekly
+
+Dear Reader,
+
+[Summarized research content here...]
+
+Yours,
+ChainlessBot
+```
+
+---
+
+## 📌 Notes
+
+- `add_agent(name, agent)` registers agents
+- `step(name, {inputs})` sets how data flows
+- Use `{{previous.output}}` syntax for chaining outputs
+- Agents can be class-based or decorator-based
+
+---
+
+## 🧪 Full Code: `research_flow.py`
+
+```python research_flow.py
+from chainless import Tool, Agent, TaskFlow
+from langchain_deepseek import ChatDeepSeek
+
+# Tool
+def mock_web_search(query: str) -> str:
+    return f"[MOCK] Web search results for: '{query}'"
+
+web_tool = Tool(
+    name="WebSearch",
+    description="Searches the web for information on a given topic.",
+    func=mock_web_search
+)
+
+# LLM
+llm = ChatDeepSeek(model="deepseek-chat")
+
+# Research Agent
+research_agent = Agent(
+    name="ResearchAgent",
+    llm=llm,
+    tools=[web_tool],
+    system_prompt="You're a research assistant. Use the WebSearch tool if needed."
+)
+
+@research_agent.custom_start
+def run_research(input: str, tools, llm, system_prompt):
+    tool_result = tools[0].execute({"query": input})
+    prompt = f"{system_prompt}nnTopic: {input}nnTool Output: {tool_result}nnWrite a research paragraph."
+    return llm.invoke(prompt)
+
+# Summarizer Agent
+summarizer_agent = Agent(
+    name="SummarizerAgent",
+    llm=llm,
+    system_prompt="Summarize the given research in a concise paragraph."
+)
+
+# Reporter Agent using AgentProtocol
+class ReporterAgent:
+    name = "ReporterAgent"
+
+    def start(self, input: str, **kwargs):
+        return {
+            "output": f"Subject: Weekly Research ReportnnDear Reader,nn{input}nnBest regards,nYour AI Assistant"
+        }
+
+# Flow
+flow = TaskFlow(name="ResearchReportFlow")
+
+# Add agents
+flow.add_agent("research", research_agent)
+flow.add_agent("summarize", summarizer_agent)
+flow.add_agent("report", ReporterAgent())
+
+# Define steps
+flow.step("research", {"input": "{{input}}"})
+flow.step("summarize", {"input": "{{research.output}}"})
+flow.step("report", {"input": "{{summarize.output}}"})
+
+# Run
+result = flow.run("The impact of AI in modern education")
+print(result["output"])
+```
+
+---
+
+## ✅ Output Example
+
+```
+[ResearchAgent] → Research paragraph...
+[SummarizerAgent] → Concise summary...
+[ReporterAgent] → Formatted email report...
+```
+
+---
+
+## 🧠 Takeaways
+
+- Use `Tool` for modular utility
+- Combine `Agent` types (class, decorator) for flexibility
+- Extend with custom logic via `custom_start`
+- Chain steps clearly with `TaskFlow`
+
+---
+
+## 📌 Next
+
+- Add error handling, retries
+- Split tasks conditionally
+- Add memory/state passing between agents
+
+---

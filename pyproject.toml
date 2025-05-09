@@ -1,0 +1,58 @@
+[project]
+name = "chainless"
+version = "0.1.0"
+description = "Chainless is a lightweight, modular framework to build task-oriented AI agents and orchestrate them in intelligent flows"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.28.1",
+    "langchain>=0.3.25",
+    "langchain-core>=0.3.58",
+    "langchain-deepseek>=0.1.3",
+    "langchain-groq>=0.3.2",
+    "langgraph>=0.4.2",
+    "pydantic>=2.11.4",
+    "pytest>=8.3.5",
+    "python-dotenv>=1.1.0",
+    "rich>=14.0.0",
+    "tenacity>=9.1.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[tool.hatch.build]
+sources = ["src"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/examples", "/tests", "/docs", ".*"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.14.1",
+    "pre-commit>=4.0.1",
+    "pytest>=8.3.5",
+    "langchain-deepseek>=0.1.3",
+    "langchain-groq>=0.3.2",
+]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple/"
+publish-url = "https://upload.pypi.org/legacy/"
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+
+[tool.uv.workspace]
+members = ["lib_test"]

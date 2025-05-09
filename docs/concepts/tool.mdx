@@ -1,0 +1,174 @@
+---
+title: "Tool"
+description: "Create validated, structured functions that can be used safely by LLM agents."
+icon: "toolbox"
+---
+
+## Overview
+
+The `Tool` class allows you to wrap Python functions—synchronous or asynchronous—with input validation, rich metadata, and compatibility with LLM agent frameworks such as LangChain.
+
+It enables:
+- Pydantic-based input validation
+- Safe execution of async and sync functions
+- Metadata generation for prompt or UI integration
+- Seamless conversion to LangChain `StructuredTool`
+
+---
+
+## Basic Usage
+
+### Simple Sync Function
+
+```python
+from chainless import Tool
+
+def greet(name: str):
+    return f"Hello, {name}!"
+
+tool = Tool("Greeter", "Greets a person by name", greet)
+tool.execute({"name": "Alice"})
+# Output: "Hello, Alice!"
+```
+
+### With Async Function
+
+```python
+import asyncio
+
+async def async_greet(name: str):
+    return f"Hi (async), {name}!"
+
+tool = Tool("AsyncGreeter", "Asynchronous greeting", async_greet)
+await tool.execute({"name": "Bob"})
+```
+
+---
+
+## Input Validation with Pydantic
+
+You can provide a schema to ensure input data is validated before execution.
+
+```python
+from pydantic import BaseModel
+
+class GreetSchema(BaseModel):
+    name: str
+
+tool = Tool("Greeter", "Greets a person", greet, input_schema=GreetSchema)
+
+# Valid
+tool.execute({"name": "Alice"})
+
+# Invalid (raises ToolInputValidationError)
+tool.execute({"name": 123})
+```
+
+---
+
+## Attributes
+
+| Name              | Type                   | Description                                                  |
+|-------------------|------------------------|--------------------------------------------------------------|
+| `name`           | `str`                 | Unique identifier for the tool                               |
+| `description`    | `str`                 | Used in UIs and LLM prompt construction                      |
+| `func`           | `Callable`            | The actual function (sync or async) to execute               |
+| `input_schema`   | `Optional[BaseModel]` | Pydantic schema for validating and describing tool inputs    |
+| `raise_on_error` | `bool` _(default=True)_ | If `False`, will suppress exceptions and log errors         |
+
+---
+
+## Metadata via `describe()`
+
+```python
+tool.describe()
+
+# Output:
+{
+  "name": "Greeter",
+  "description": "Greets a person",
+  "parameters": {
+    "name": {
+      "type": "string",
+      "description": "No description provided."
+    }
+  }
+}
+```
+
+---
+
+## LangChain Integration
+
+```python
+structured_tool = tool.convert_tool_to_langchain()
+
+# Pass to a LangChain agent
+agent = initialize_agent([structured_tool], llm=llm, ...)
+```
+
+---
+
+## Error Handling
+
+If validation fails, a `ToolInputValidationError` will be raised with detailed information:
+
+```python
+try:
+    tool.execute({"name": 42})
+except ToolInputValidationError as err:
+    print(err)
+```
+
+---
+
+## Real-World Example
+
+```python
+from chainless import Tool, Agent
+
+def get_weather(city: str):
+    return f"{city} is sunny today."
+
+weather_tool = Tool("WeatherTool", "Provides current weather", get_weather)
+
+agent = Agent(
+  name="WeatherAgent",
+  llm=llm,
+  tools=[weather_tool],
+  system_prompt="Only respond using weather tool."
+)
+
+response = agent.start("What's the weather in Istanbul?")
+print(response)
+```
+
+---
+
+## Best Practices
+
+- Keep tool functions pure and stateless
+- Always define an input schema for clarity and safety
+- Use `describe()` to integrate with UIs or LLM-based planning systems
+- Avoid side effects inside tool logic (e.g. file writes or database mutations)
+
+---
+
+## Interface Summary
+
+```ts
+interface Tool {
+  name: string;
+  description: string;
+  execute(input: Record<string, any>): Promise<any>;
+  describe(): {
+    name: string;
+    description: string;
+    parameters: Record<string, any>;
+  };
+}
+```
+
+---
+
+Tools are the building blocks for agent autonomy. Define them clearly, validate inputs properly, and structure them for reusability. They integrate seamlessly into the Chainless Agent and TaskFlow system for powerful orchestration.

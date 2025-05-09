@@ -1,0 +1,82 @@
+---
+title: "Introduction"
+description: "Composable agents. Flexible task flows. One lightweight framework."
+icon: "handshake"
+---
+
+# What is Chainless?
+
+**Chainless is a lightweight, modular framework to build task-oriented AI agents and orchestrate them in intelligent flows.**
+
+It allows you to define agents, tools, and tasks in a composable and scalable way — ideal for both personal projects and production-grade pipelines.
+
+```bash
+pip install chainless
+```
+
+```python
+from chainless import Tool, Agent, TaskFlow
+
+def greet(name: str):
+    return f"Hello, {name}!"
+
+tool = Tool("Greeter", "Greets the user", greet)
+
+agent = Agent("WelcomeAgent", tools=[tool])
+flow = TaskFlow("GreetFlow").add_agent("WelcomeAgent", agent)
+
+flow.step("WelcomeAgent", input_map={"input": "{{input}}"})
+
+print(flow.run("Alice")["output"])
+```
+
+---
+
+## How Chainless Works
+
+![](/images/chainless-arch.png)
+
+| Component  | Description                                                  | Key Features                                                                                   |
+| ---------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Agent      | A self-contained unit powered by an LLM and optional tools   | - Tool invocation  - Custom start hooks  - System prompts  - Stateless or memory-driven design |
+| Tool       | A callable Python function with metadata                     | - Reusable  - Easily registered  - Simple input/output schema                                  |
+| TaskFlow   | Composable flow engine that connects agents together         | - Sequential/Parallel execution  - Input mapping  - Output routing                             |
+| Custom Start | Override how an agent processes data                      | - Direct LLM calls  - Prompt chaining  - Arbitrary preprocessing logic                         |
+
+---
+
+## Core Features
+
+<CardGroup cols="2">
+  <Card title="Modular Agents" icon="robot">
+    Design lightweight agents that use tools or reason directly. Compose complex logic without over-engineering.
+  </Card>
+  <Card title="Composable TaskFlows" icon="flow-chart">
+    Connect agents in flexible sequences or parallel blocks. Build entire pipelines by just describing the data flow.
+  </Card>
+  <Card title="Native Python Tools" icon="toolbox">
+    Define your own tools with pure Python. Chainless automatically wraps them with metadata for agent usage.
+  </Card>
+  <Card title="Custom Execution Hooks" icon="sliders">
+    Fully control how an agent executes. Inject prompts, chain models, or pre/post-process using decorators.
+  </Card>
+  <Card title="Zero-Bloat, Server-Free" icon="feather">
+    Keep it local. Chainless doesn’t force you into a runtime. No cloud service, no lock-in — just Python.
+  </Card>
+  <Card title="LLM Agnostic" icon="plug">
+    Bring your own model — from OpenAI, Groq, DeepSeek, Ollama or others. Chainless is fully compatible.
+  </Card>
+</CardGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols="2">
+  <Card title="Installation Guide" icon="wrench" href="/installation">
+    Follow our installation guide to get started with Chainless in your environment.
+  </Card>
+  <Card title="Quickstart Tutorial" icon="rocket" href="/quickstart">
+    Learn how to define your first agent and connect tools in minutes with our quickstart.
+  </Card>
+</CardGroup>

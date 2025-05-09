@@ -1,0 +1,72 @@
+---
+title: "Installation"
+description: "Get started with Chainless – install, configure, and build your first task-driven agent system."
+icon: "wrench"
+---
+
+<Note>
+  **Python Version Requirements**
+
+  Chainless requires `Python >=3.10`. You can check your current version using:
+
+  ```bash
+  python3 --version
+  ```
+
+  Need to upgrade? Visit [python.org/downloads](https://python.org/downloads)
+</Note>
+
+# Installing Chainless
+
+Let’s get you up and running with Chainless! ⚙️
+
+<Steps>
+  <Step title="Install Chainless">
+    Install Chainless using pip:
+
+    ```shell Terminal
+    pip install chainless
+    ```
+  </Step>
+
+  <Step title="Upgrade Chainless (If Already Installed)">
+    If you already have Chainless installed and want the latest version:
+
+    ```shell Terminal
+    pip install --upgrade chainless
+    ```
+
+    <Note>
+      Skip this step if you’re doing a fresh install.
+    </Note>
+  </Step>
+
+  <Step title="Verify Installation">
+    Confirm Chainless is installed correctly:
+
+    ```shell Terminal
+    pip freeze | grep chainless
+    ```
+
+    You should see something like:
+
+    ```markdown Output
+    chainless==X.X.X
+    ```
+
+    <Check>
+      Installation successful! You're ready to create your first Tool, Agent, and TaskFlow.
+    </Check>
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols="2">
+  <Card title="Create Your First Agent" icon="code" href="/quickstart">
+    Follow the quickstart tutorial to define your first Agent and run it inside a TaskFlow.
+  </Card>
+  <Card title="Join the Community" icon="comments" href="https://www.github.com/onurartan/chainless">
+    Ask questions, share your projects, and collaborate with other developers using Chainless.
+  </Card>
+</CardGroup>

@@ -1,0 +1,220 @@
+---
+title: "Agent"
+description: "Custom LLM agents with decorators, tools, and advanced orchestration."
+icon: "user-robot"
+---
+
+## Overview
+
+The `Agent` class is a task-oriented agent system that executes language model-based tasks in a customizable way. It works with LangChain compatible LLMs and has a customizable structure to plan your tasks and interact with tools when needed.
+
+The main objective of this system:
+- Ensuring modularity
+- Designing each `Agent` to be task-oriented
+- Ability to change behavior with custom start (`custom_start`) functions when needed
+
+---
+
+`Agent` is a modular, task-focused abstraction for building intelligent LLM-powered units. It supports decorators, dynamic prompts, custom execution logic, and integration with tools — enabling developers to compose flexible and reusable agent-based systems.
+
+---
+
+## 🤖 Overview
+
+Each `Agent` acts like a focused, autonomous LLM task handler.
+
+Key principles:
+- Encapsulation of specific responsibilities
+- Decorator support for logic customization
+- Full control over prompt engineering and execution
+- Seamless tool usage
+- Compatible with LangChain LLMs and Tool protocols
+
+---
+
+## 🔧 Basic Example
+
+```python
+from chainless import Agent
+from langchain_openai  import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4o")
+
+agent = Agent(
+  name="Summarizer",
+  llm=llm,
+  system_prompt="Summarize the input text in a short, clear way."
+)
+
+result = agent.start("What is Python?")
+print(result["output"])
+```
+
+---
+
+## ⚙️ Parameters
+
+| Parameter         | Type                | Description |
+|-------------------|---------------------|-------------|
+| `name`           | `str`               | Unique identifier for the agent |
+| `llm`            | `BaseChatModel`     | LangChain-compatible LLM instance |
+| `tools` _(opt)_  | `list[Tool]`        | Optional tools the agent can use |
+| `system_prompt` _(opt)_ | `str`     | Initial system instruction |
+| `custom_start` _(opt)_ | `Callable` | Override logic using a custom function |
+
+---
+
+## ✨ Functional Prompt via Decorator
+
+You can define the system prompt dynamically using decorators:
+
+```python
+@agent.set_system_prompt
+def prompt():
+    return "Reply in Turkish. Keep answers concise and to the point."
+```
+
+---
+
+## 🔁 Custom Execution with `custom_start`
+
+Decorators can fully override agent behavior. The `custom_start` method receives the following arguments:
+
+- `input`
+- `tools`
+- `llm`
+- `system_prompt`
+
+```python
+@agent.custom_start
+def custom_run(input: str, llm, system_prompt):
+    prompt = f"{system_prompt}nnQ: {input}"
+    return llm.invoke(prompt)
+```
+
+---
+
+## 🛠 Using Tools with Agents
+
+Each `Tool` includes a name, description, and a callable. Tools are directly usable in the agent flow.
+
+```python
+from chainless import Tool
+
+def search_wiki(query: str):
+    return f"Fetched data for: {query}"
+
+wiki_tool = Tool("WikiSearch", "Fetches summary from Wikipedia", search_wiki)
+
+agent = Agent(
+    name="WikiAgent",
+    llm=llm,
+    tools=[wiki_tool],
+)
+```
+
+---
+
+## 📦 AgentProtocol Support
+
+You can also implement lightweight custom agents using the AgentProtocol interface:
+
+```python
+class EchoAgent:
+    name = "Echo"
+
+    def start(self, input: str, verbose: bool = False, **kwargs):
+        return { "output": f"Echoed: {input}" }
+```
+
+---
+
+## 🔬 Advanced Multi-Agent Flow
+
+```python
+from chainless import Agent
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+
+llm = ChatOpenAI(model="gpt-4o")
+
+wiki_agent = Agent(name="WikiAgent", llm=llm, system_prompt="Retrieve Wikipedia data.")
+yt_agent = Agent(name="YTAgent", llm=llm, system_prompt="Fetch YouTube transcript.")
+summary_agent = Agent(name="SummaryAgent", llm=llm, system_prompt="Summarize all inputs.")
+
+@summary_agent.custom_start
+def summarize(input: str, llm, system_prompt):
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "{input}")
+    ])
+    chain = llm | prompt
+    return chain.invoke(input)
+```
+
+---
+
+## ▶️ Execution: `start(input, verbose=False, **kwargs)`
+
+Main method to invoke agent logic. Falls back to built-in logic if no `custom_start` is provided.
+
+```python
+output = agent.start("Tell me about Python.")
+print(output["output"])
+```
+
+---
+
+## 📤 Output Format
+
+```json
+{
+  "output": "Result from LLM or custom logic"
+}
+```
+
+---
+
+## 🧠 Best Practices
+
+- Keep each agent task-specific (Single Responsibility Principle)
+- Use decorators for testable custom behavior
+- Use clear and minimal `system_prompt` values
+- Prefer stateless `custom_start` logic
+- Tools are powerful when used with dynamic input templates
+
+---
+
+## 🧩 Interface: AgentProtocol (TS)
+
+```ts
+interface AgentProtocol {
+  name: string;
+  start(input: string, verbose?: boolean, ...args: any[]): Promise<{ output: string }>;
+}
+```
+
+---
+
+## 🧵 Orchestration with TaskFlow
+
+Combine agents into a pipeline with `TaskFlow`:
+
+```python
+from chainless import TaskFlow
+
+flow = TaskFlow(name="ResearchFlow", agents=[wiki_agent, yt_agent, summary_agent])
+result = flow.run("What is Artificial Intelligence?")
+print(result)
+```
+
+---
+
+## 📚 See Also
+
+- `Tool` for defining custom tools
+- `TaskFlow` for full orchestration capabilities
+
+---
+
+`chainless.Agent` helps you build modular AI logic, encapsulating capabilities into reusable and composable intelligent agents.

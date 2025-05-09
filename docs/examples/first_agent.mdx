@@ -1,0 +1,181 @@
+---
+title: "Your First Flow"
+description: "Build your first intelligent workflow using Tool, Agent, and TaskFlow from chainless."
+icon: "1"
+---
+
+## 🧠 What You'll Build
+
+In this tutorial, you'll learn how to:
+
+- Define a **Tool** (a function with metadata)
+- Create an **Agent** (a smart assistant that can use tools)
+- Compose a **TaskFlow** (a sequential pipeline of agents)
+
+This is the ideal place to begin your journey with `chainless`.
+
+---
+
+## 📦 File Structure
+
+Create a file named:
+
+```
+first_flow.py
+```
+
+---
+
+## 🔧 Step 1 — Define a Tool
+
+Tools are simple functions wrapped with structure. Think of them as utilities your agents can use.
+
+```python
+from chainless import Tool
+
+def search_wikipedia(query: str):
+    return f"Mocked Wikipedia result for: {query}"
+
+wiki_tool = Tool(
+    name="Wikipedia",
+    description="Searches Wikipedia for a given topic.",
+    func=search_wikipedia
+)
+```
+
+---
+
+## 🧠 Step 2 — Create an Agent
+
+Agents can use tools and interact with language models.
+
+```python
+from chainless import Agent
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4o")
+
+research_agent = Agent(
+    name="Researcher",
+    llm=llm,
+    tools=[wiki_tool],
+    system_prompt="You're a research assistant. Answer based on facts and use tools when needed."
+)
+```
+
+---
+
+## 🔗 Step 3 — Compose with TaskFlow
+
+A `TaskFlow` runs agents in sequence and carries the input/output through the pipeline.
+
+```python
+from chainless import TaskFlow
+
+flow = TaskFlow(
+    name="SimpleResearchFlow",
+    agents=[research_agent]
+)
+
+result = flow.run("Tell me about the history of computing.")
+print(result)
+```
+
+---
+
+## 🧪 Full Code: `first_flow.py`
+
+```python first_flow.py
+from chainless import Tool, Agent, TaskFlow
+from langchain_openai import ChatOpenAI
+
+# Tool
+def search_wikipedia(query: str):
+    return f"Mocked Wikipedia result for: {query}"
+
+wiki_tool = Tool(
+    name="Wikipedia",
+    description="Searches Wikipedia for a given topic.",
+    func=search_wikipedia
+)
+
+# LLM
+llm = ChatOpenAI(model="gpt-4o")
+
+# Agent
+research_agent = Agent(
+    name="Researcher",
+    llm=llm,
+    tools=[wiki_tool],
+    system_prompt="You're a research assistant. Answer based on facts and use tools when needed."
+)
+
+# Flow
+flow = TaskFlow(
+    name="SimpleResearchFlow",
+    agents=[research_agent]
+)
+
+# Run
+result = flow.run("What is quantum computing?")
+print(result)
+```
+
+---
+
+## ⚙️ Running the Flow
+
+<Steps>
+  <Step title="Create a virtual environment">
+    <CodeGroup>
+      ```bash Mac
+      python3 -m venv .venv
+      source .venv/bin/activate
+      ```
+
+      ```bash Windows
+      python -m venv .venv
+      .venv/Scripts/activate
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    pip install chainless langchain_openai 
+    ```
+  </Step>
+
+  <Step title="Set your API key">
+    ```bash .env
+    OPENAI_API_KEY=sk-***
+    ```
+  </Step>
+
+  <Step title="Run your script">
+    ```bash
+    python first_flow.py
+    ```
+  </Step>
+</Steps>
+
+---
+
+## ✅ Output Example
+
+```
+[Researcher]: Using tool Wikipedia...
+Mocked Wikipedia result for: quantum computing
+```
+
+---
+
+## 🚀 What's Next?
+
+- Add more tools like `WebSearch`, `DocumentReader`, etc.
+- Create custom behaviors with `custom_start`
+- Use `TaskFlow` to chain multiple agents together (e.g., researcher → summarizer → reporter)
+
+---
+
+Let your agents do the thinking. Build once, automate forever ⚡

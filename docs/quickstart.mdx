@@ -1,0 +1,100 @@
+---
+title: "Quickstart"
+description: "Build your first AI agent with Chainless in under 2 minutes."
+icon: "rocket"
+---
+
+## Build Your First Chainless Agent
+
+Let’s create a simple AI agent using Chainless that can utilize tools and collaborate with other agents to complete a task.
+
+Make sure you have `chainless` installed. If not, follow the [installation guide](/installation) first.
+
+<Steps>
+  <Step title="Set Your OpenAI API Key">
+    Chainless supports various LLM providers. In this example, we'll use OpenAI's GPT-4 model by setting the required environment variable:
+
+    <CodeGroup>
+      ```python Python
+      import os
+
+      os.environ["OPENAI_API_KEY"] = "sk-***"
+      ```
+
+      ```bash Mac
+      export OPENAI_API_KEY=sk-***
+      ```
+
+      ```powershell Windows
+      setx OPENAI_API_KEY sk-***
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Define a Tool Function">
+    Tools are callable functions that your agents can use. Let's define a simple search tool:
+
+    ```python
+    from chainless import Tool
+
+    def search_web(query: str):
+        return f"Searching web for: "{query}""
+
+    search_tool = Tool("WebSearch", "Performs a basic web search", search_web)
+    ```
+  </Step>
+
+  <Step title="Create Your Agent">
+    Agents are the core of Chainless. They use tools and respond to tasks. Here's a simple agent setup:
+
+    ```python
+    from chainless import Agent
+    from langchain_openai import ChatOpenAI
+
+    llm = ChatOpenAI(model="gpt-4")
+
+    agent = Agent(
+      name="ResearchAgent",
+      llm=llm,
+      tools=[search_tool],
+      system_prompt="Use the WebSearch tool to find information about a topic."
+    )
+    ```
+  </Step>
+
+  <Step title="Run the Agent Manually">
+    You can invoke the agent directly by calling `start()`:
+
+    ```python
+    response = agent.start("What's new with AI in 2025?")
+    print(response)
+    ```
+  </Step>
+
+  <Step title="Orchestrate with TaskFlow">
+    For more complex, multi-step tasks, use `TaskFlow`:
+
+    ```python
+    from chainless import TaskFlow
+
+    flow = TaskFlow("AI Research Task", verbose=True)
+    flow.add_agent("Research", agent)
+    flow.step("Research", input_map={"input": "{{input}}"})
+
+    result = flow.run("Tell me the latest news in AI policy.")
+    print(result["output"]["content"])
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols="2">
+  <Card title="Explore Tools & Customization" icon="toolbox" href="/concepts/tool">
+    Learn how to build and register more powerful tools and connect external APIs or services.
+  </Card>
+  <Card title="Dive into TaskFlow" icon="sitemap" href="/concepts
+/taskflow">
+    Discover how to coordinate multiple agents in structured workflows using TaskFlow.
+  </Card>
+</CardGroup>
