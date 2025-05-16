@@ -72,10 +72,13 @@ A `TaskFlow` runs agents in sequence and carries the input/output through the pi
 ```python
 from chainless import TaskFlow
 
-flow = TaskFlow(
-    name="SimpleResearchFlow",
-    agents=[research_agent]
-)
+flow = TaskFlow(name="SimpleResearchFlow")
+
+# Add agents
+flow.add_agent("ResearcherAgent", research_agent)
+
+# Define steps
+flow.step("ResearcherAgent", {"input": "{{input}}"})
 
 result = flow.run("Tell me about the history of computing.")
 print(result)
@@ -111,10 +114,13 @@ research_agent = Agent(
 )
 
 # Flow
-flow = TaskFlow(
-    name="SimpleResearchFlow",
-    agents=[research_agent]
-)
+flow = TaskFlow(name="SimpleResearchFlow")
+
+# Add agents
+flow.add_agent("ResearcherAgent", research_agent)
+
+# Define steps
+flow.step("ResearcherAgent", {"input": "{{input}}"})
 
 # Run
 result = flow.run("What is quantum computing?")

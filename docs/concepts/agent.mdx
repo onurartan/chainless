@@ -202,8 +202,14 @@ Combine agents into a pipeline with `TaskFlow`:
 
 ```python
 from chainless import TaskFlow
+flow = TaskFlow(name="ResearchFlow")
 
-flow = TaskFlow(name="ResearchFlow", agents=[wiki_agent, yt_agent, summary_agent])
+# Add agents
+flow.add_agent("WikiAgent", wiki_agent)
+
+# Define steps
+flow.step("WikiAgent", {"input": "{{input}}"})
+
 result = flow.run("What is Artificial Intelligence?")
 print(result)
 ```
