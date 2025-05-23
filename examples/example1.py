@@ -40,6 +40,17 @@ wiki_agent = Agent(
     system_prompt="Bring only Wikipedia information. Do not add any other information.",
 )
 
+print(wiki_agent.describe())
+
+
+@wiki_agent.tool(description="Greet a user by name")
+def greet(name: str, excited: bool = False):
+    """Greets someone by name"""
+    return f"Hello, {name}{'!' if excited else '.'}"
+
+
+print(wiki_agent.tools_dict)
+
 yt_agent = Agent(
     name="YouTubeAgent",
     llm=llm,
@@ -127,12 +138,14 @@ flow.add_agent("Summarizer", summary_agent)
 flow.add_agent("Reporter", rapor_agent)
 
 
+flow.alias("WikipediaAgentOutput", "WikipediaAgent", "output.output")
+
 flow.step("WikipediaAgent", input_map={"input": "{{input}}"})
 flow.step("YouTubeAgent", input_map={"input": "{{input}}"})
 flow.parallel(["WikipediaAgent", "YouTubeAgent"])
 
 
-flow.step("WikipediaSummary", input_map={"input": "{{WikipediaAgent.output.output}}"})
+flow.step("WikipediaSummary", input_map={"input": "{{WikipediaAgentOutput}}"})
 flow.add_agent("WikipediaSummary", summary_agent)
 
 flow.step("YouTubeSummary", input_map={"input": "{{YouTubeAgent.output.output}}"})

@@ -201,8 +201,8 @@ The framework is ideal for:
 ## Roadmap
 
 - ✅ Decorator-based agent customization
+- ✅ Async tool support
 - ⏳ Built-in memory support
-- ⏳ Async tool support
 - ⏳ CLI for flow testing
 
 ---

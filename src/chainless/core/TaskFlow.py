@@ -1,38 +1,132 @@
-from .Agent import Agent
-from ..utils.serialization import clean_output_structure
-from ..interfaces.AgentProtocol import AgentProtocol
-from chainless.logger import get_logger
-from pydantic import BaseModel
-import re
 import asyncio
-import traceback
+from typing import List, Callable, Optional, Union
+
+from .taskflow import TaskContext, TaskExecutor
+from ..interfaces.AgentProtocol import AgentProtocol
+from .._utils._validate_callback import _validate_callback
+from .._utils._serialization import clean_output_structure
+from .._utils._validate_name import validate_name
+from .._schemas import TaskStep
 
 
 class TaskFlow:
+    """
+    A structured and extensible task orchestration engine for managing sequences
+    of agent-based steps. Supports sequential and parallel execution, conditional steps,
+    retries, and lifecycle callbacks.
+
+    Example:
+        >>> flow = TaskFlow(name="ExampleFlow", verbose=True)
+        >>> flow.add_agent("agent1", SomeAgent())
+        >>> flow.step("agent1", input_map={"text": "{{input}}"})
+        >>> result = flow.run("Hello world")
+        >>> print(result["output"])
+
+    Args:
+        name (str): Unique name identifying the task flow.
+        verbose (bool): If True, logs detailed execution info.
+        on_step_complete (Callable, optional): Called when a step successfully completes.
+        retry_on_fail (int): Global retry count for failed steps.
+        on_step_start (Callable, optional): Called before a step starts.
+        on_step_error (Callable, optional): Called if a step raises an exception.
+
+    Attributes:
+        ctx (TaskContext): Internal context containing agents, steps, and outputs.
+        executor (TaskExecutor): Executes individual steps based on the context.
+        _parallel_groups (List[str]): Groups of steps to be executed in parallel.
+    """
+
     def __init__(
         self,
         name: str,
         verbose: bool = False,
-        on_step_complete=None,
         retry_on_fail: int = 0,
+        
+        # NEW
+        on_step_complete: Optional[Callable] = None,
+        on_step_start: Optional[Callable] = None,
+        on_step_error: Optional[Callable] = None,
     ):
-        self.name = name
-        self.agents = {}
-        self.steps = []
-        self.step_outputs = {}
-        self.verbose = verbose
-        self.on_step_complete = on_step_complete
-        self.retry_on_fail = retry_on_fail
-        self._parallel_groups = []
+        validate_name(name, "taskflow name")
 
-        self.logger = get_logger(f"[TaskFlow:{self.name}]")
+        self.ctx = TaskContext(name=name, verbose=verbose)
+        self.executor = TaskExecutor(self.ctx)
+
+        if on_step_start:
+            _validate_callback(
+                on_step_start, ["step_name", "user_input"], "on_step_start"
+            )
+        if on_step_complete:
+            _validate_callback(
+                on_step_complete, ["step_name", "output"], "on_step_complete"
+            )
+        if on_step_error:
+            _validate_callback(on_step_error, ["step_name", "error"], "on_step_error")
+
+        self._parallel_groups: List[List[str]] = []
+
+        self.ctx.retry_on_fail = retry_on_fail
+        self.ctx.on_step_start = on_step_start
+        self.ctx.on_step_complete = on_step_complete
+        self.ctx.on_step_error = on_step_error
 
     def add_agent(self, name: str, agent: AgentProtocol):
-        if not isinstance(agent, AgentProtocol):
-          raise TypeError(f"{name} is not a valid Agent. It must implement start().")
-        self.agents[name] = agent
+        """
+        Register an agent to be used in the task flow.
 
-    def step(self, agent_name: str, input_map: dict, retry_on_fail: int = None):
+        Args:
+            name (str): Unique identifier for the agent.
+            agent (AgentProtocol): An object that implements the `start()` method.
+
+        Example:
+            >>> flow.add_agent("summarizer", SummarizerAgent())
+
+        Raises:
+            ValueError: If an agent with the same name already exists.
+            TypeError: If the provided object does not implement AgentProtocol.
+        """
+        validate_name(name, "agent name")
+        if name in self.ctx.agents:
+            raise ValueError(f"Agent with name '{name}' already exists.")
+        if not isinstance(agent, AgentProtocol):
+            raise TypeError(f"{name} is not a valid Agent. It must implement start().")
+        self.ctx.agents[name] = agent
+
+    def alias(self, alias_name: str, from_step: str, key: str):
+        """
+        Create a reusable alias for a value in a step's output. Useful for referencing
+        specific keys from a step in later inputs.
+
+        Args:
+            alias_name (str): The name to use in future input mappings.
+            from_step (str): The step name where the original value was produced.
+            key (str): The key in the step's output to alias.
+
+        Example:
+            >>> flow.alias("summary", from_step="summarizer", key="text")
+            >>> flow.step("translator", input_map={"text": "{{summary}}"})
+
+        Raises:
+            ValueError: If alias already exists or inputs are invalid.
+        """
+        validate_name(alias_name, "alias name")
+        if alias_name in self.ctx._aliases:
+            raise ValueError(f"Alias '{alias_name}' already exists.")
+        self.ctx._aliases[alias_name] = (from_step, key)
+
+    def step(
+        self,
+        agent_name: str,
+        input_map: dict,
+        step_name: Optional[str] = None,
+        retry_on_fail: int = None,
+        timeout: int = None,
+        on_start: Optional[Callable] = None,
+        on_complete: Optional[Callable] = None,
+        on_error: Optional[Callable] = None,
+        condition: Union[Callable, None] = None,
+        depends_on: Optional[List[str]] = None,
+    ):
         """
         Add a new step to the task flow using a specified agent.
 
@@ -40,21 +134,49 @@ class TaskFlow:
         The step will resolve dynamic input references before execution.
 
         Args:
-            agent_name (str): Name of the agent to be executed.
-            input_map (dict): Dictionary mapping input parameters for the agent.
-                              Supports templated values like '{{input}}' or '{{agent.output_key}}'.
-            retry_on_fail (int, optional): Number of times to retry this step on failure.
-                                           Overrides the global retry count if provided.
-        """
-        self.steps.append(
-            {
-                "agent_name": agent_name,
-                "input_map": input_map,
-                "retry_on_fail": retry_on_fail,
-            }
-        )
+            agent_name (str): Name of a registered agent.
+            input_map (dict): Input dictionary with static values or placeholders.
+            step_name (str): agent_name is used by default, but if you want to use your agents on other steps, it is recommended to use step_name
+            retry_on_fail (int, optional): Overrides global retry setting for this step.
+            timeout (int, optional): Timeout for this step in seconds.
+            on_start (Callable, optional): Hook before step execution.
+            on_complete (Callable, optional): Hook after step completion.
+            on_error (Callable, optional): Hook for error handling.
+            condition (Callable, optional): Boolean function to conditionally run step.
+            depends_on (List[str], optional): Other step names this step depends on.
 
-    def parallel(self, agent_names: list):
+        Example:
+            >>> flow.step("summarizer", input_map={"text": "{{input}}"})
+            >>> flow.step("translator", input_map={"text": "{{summarizer.text}}"})
+        """
+
+        if step_name is None:
+            step_name = agent_name
+        if any(s.step_name == step_name for s in self.ctx.steps):
+            raise ValueError(f"Step with agent_name '{step_name}' already exists.")
+        step_obj = TaskStep(
+            step_name=step_name,
+            agent_name=agent_name,
+            input_map=input_map,
+            retry_on_fail=retry_on_fail,
+            timeout=timeout,
+            on_start=on_start,
+            on_complete=on_complete,
+            on_error=on_error,
+            condition=condition,
+            depends_on=depends_on,
+        )
+        self.ctx.steps.append(step_obj)
+
+        # **this was the old usage, now changed to validation with pydantic**
+        # {
+        #         "agent_name": agent_name,
+        #         "input_map": input_map,
+        #         "retry_on_fail": retry_on_fail,
+        #         "timeout": timeout,
+        #     }
+
+    def parallel(self, step_names: list):
         """
         Define a set of agents to be executed in parallel.
 
@@ -62,124 +184,12 @@ class TaskFlow:
         Their results will be stored individually in the step_outputs.
 
         Args:
-            agent_names (list): List of agent names that should be run in parallel.
+            step_names (list): List of step names that should be run in parallel.
+
+        Example:
+        >>> flow.parallel(["summarizer", "sentiment"])
         """
-        self._parallel_groups.append(agent_names)
-
-    def resolve_input(self, input_map: dict) -> dict:
-        """
-        Resolve input mappings by replacing template variables with actual values.
-
-        Supports placeholders like '{{input}}' for initial input or nested references
-        such as '{{agent_name.output_key}}' to previous step outputs.
-
-        Args:
-            input_map (dict): Input dictionary possibly containing template strings.
-
-        Returns:
-            dict: Input map with resolved values.
-        """
-        resolved = {}
-        for key, val in input_map.items():
-            try:
-                if isinstance(val, str) and "{{" in val:
-                    if "{{input}}" in val:
-                        resolved[key] = getattr(self, "initial_input", "")
-                    else:
-                        agent_ref = val.strip("{} ")
-                        parts = self._resolve_references(agent_ref)
-                        resolved[key] = parts
-                else:
-                    resolved[key] = val
-            except Exception as e:
-                self._log(f"[resolve_input] Error resolving key ({key}): {e}")
-                resolved[key] = None
-        return resolved
-
-    def _resolve_references(self, agent_ref: str):
-        parts = self._split_reference(agent_ref)
-        agent_name = parts[0]
-        step_output = self.step_outputs.get(agent_name, {})
-        return self._resolve_nested_references(step_output, parts[1:])
-
-    def _split_reference(self, agent_ref: str):
-        return [part for part in re.split(r"[\.\[\]]+", agent_ref) if part]
-
-    def _resolve_nested_references(self, current_data, parts):
-        if not parts:
-            return current_data
-        part = parts[0]
-        try:
-            if isinstance(current_data, dict):
-                return self._resolve_nested_references(
-                    current_data.get(part), parts[1:]
-                )
-            elif isinstance(current_data, list):
-                index = int(part)
-                return self._resolve_nested_references(current_data[index], parts[1:])
-            elif isinstance(current_data, BaseModel):
-                return self._resolve_nested_references(
-                    getattr(current_data, part), parts[1:]
-                )
-        except Exception as e:
-            self._log(f"[resolve_nested_references] Hata: {e}")
-        return None
-
-    def _log(self, message: str):
-        if self.verbose:
-            self.logger.info(message)
-
-    async def _run_step_async(self, agent_name, input_map, retry_override=None):
-        """
-        Asynchronously execute a single step for a given agent.
-
-        This includes resolving input, executing the agent, handling retries,
-        and storing the output. Will log and raise errors if retries are exhausted.
-
-        Args:
-            agent_name (str): The name of the agent to run.
-            input_map (dict): The resolved input map for the agent.
-            retry_override (int, optional): If specified, overrides the default retry logic.
-
-        Returns:
-            Tuple[str, Any]: The agent name and the resulting output.
-        """
-        resolved_input = self.resolve_input(input_map)
-        resolved_input["verbose"] = self.verbose
-        resolved_input["input"] = resolved_input.get("input", "") or ""
-
-        self._log(f"Resolved input for {agent_name}: {resolved_input}")
-
-        # Run Step AGENT
-        agent = self.agents[agent_name]
-
-        retries = retry_override if retry_override is not None else self.retry_on_fail
-        last_exception = None
-
-        while True:
-            try:
-                output = await asyncio.to_thread(agent.start, **resolved_input)
-                self._log(f"{agent_name} agent başarıyla tamamlandı.")
-                break
-            except Exception as e:
-                last_exception = e
-                tb = traceback.format_exc()
-                self._log(f"[ERROR] {agent_name} failed: {e}\n{tb}")
-                if retries <= 0:
-                    self._log(f"{agent_name} step failed with no retries left.")
-                    raise RuntimeError(f"{agent_name} step failed. Error: {e}") from e
-                retries -= 1
-                self._log(
-                    f"{agent_name} retrying ({self.retry_on_fail - retries}/{self.retry_on_fail})..."
-                )
-
-        self.step_outputs[agent_name] = output
-        if self.on_step_complete:
-            try:
-                self.on_step_complete(agent_name, output)
-            except Exception as cb_error:
-                self._log(f"[Callback ERROR] on_step_complete failed: {cb_error}")
-        return agent_name, output
+        self._parallel_groups.append(step_names)
 
     def run(self, user_input: str):
         """
@@ -197,16 +207,21 @@ class TaskFlow:
                       "flow": <All step outputs>,
                       "output": <Final output>
                   }
+
+        Example:
+         >>> flow.run("Please summarize and translate this sentence.")
+         {'flow': {...}, 'output': 'translated text'}
         """
-        self.initial_input = user_input
+        self.ctx.initial_input = user_input
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
         result = loop.run_until_complete(self._run_async())
-        last_agent = self.steps[-1]["agent_name"] if self.steps else None
+        # last_agent = self.steps[-1]["agent_name"] if self.steps else None # OLD
+        last_agent = self.ctx.steps[-1].agent_name if self.ctx.steps else None
         last_step = result.get(last_agent, {})
         output_val = (
             last_step.get("output", None) if isinstance(last_step, dict) else last_step
@@ -218,41 +233,82 @@ class TaskFlow:
 
     async def _run_async(self):
         """
-        Internal coroutine that processes each step in order or in parallel.
+        Internal coroutine for orchestrating all defined steps in order
+        or in parallel.
 
         Returns:
-            dict: All outputs from each agent step.
+            dict: Step outputs keyed by agent name.
         """
-        for step in self.steps:
-            agent_name = step["agent_name"]
-            input_map = step["input_map"]
-            retry_override = step.get("retry_on_fail")
+        # execution_order = self.executor._get_execution_order() OLD
+        execution_order = self.executor._get_execution_order
+        executed_steps = set()
+
+        for step_name in execution_order:
+            if step_name in executed_steps:
+                continue
+
+            step = self.ctx._get_step_by_name(step_name=step_name)
+            input_map = step.input_map
+            retry_override = step.retry_on_fail
+            step_timeout = step.timeout
+
+            if step.condition and not step.condition(self.ctx.step_outputs):
+                self.ctx._log(f"[STEP:SKIPPED] {step_name} condition not met, skipped.")
+                continue
 
             parallel_group = next(
-                (group for group in self._parallel_groups if agent_name in group), None
+                (group for group in self._parallel_groups if step_name in group), None
             )
 
             if parallel_group:
-                self._log(f"Running parallel group: {parallel_group}")
+                self.ctx._log(f"Running parallel group: {parallel_group}")
                 coros = []
+                names = []
                 for name in parallel_group:
-                    m = next(
-                        s["input_map"] for s in self.steps if s["agent_name"] == name
-                    )
-                    r = next(
-                        (
-                            s.get("retry_on_fail")
-                            for s in self.steps
-                            if s["agent_name"] == name
-                        ),
-                        None,
-                    )
-                    coros.append(self._run_step_async(name, m, retry_override=r))
-                await asyncio.gather(*coros)
-                self._parallel_groups.remove(parallel_group)
-            else:
-                await self._run_step_async(
-                    agent_name, input_map, retry_override=retry_override
-                )
 
-        return self.step_outputs
+                    if name in executed_steps:
+                        continue
+                    pstep = self.ctx._get_step_by_name(step_name=name)
+                    m = pstep.input_map  # input_map
+                    r = pstep.retry_on_fail or None  # retry_override
+                    t = pstep.timeout or None  # timeout
+
+                    coros.append(
+                        self.executor.run_step_async(
+                            step_name=name, input_map=m, retry_override=r, timeout=t
+                        )
+                    )
+                    names.append(name)
+                    executed_steps.add(name)
+                results = await asyncio.gather(*coros, return_exceptions=True)
+                errors = []
+
+                for name, result in zip(names, results):
+                    if isinstance(result, Exception):
+                        errors.append(name, result)
+                        self.ctx._log(
+                            f"[Parallel ERROR] Step '{name}' failed: {result}"
+                        )
+                        await self.executor._safe_call_callback(
+                            self.ctx.on_step_error, "on_step_error", name, str(result)
+                        )
+                    else:
+                        executed_steps.add(name)
+
+                if errors:
+                    err_summary = "; ".join(f"{name}: {str(e)}" for name, e in errors)
+                    raise RuntimeError(
+                        f"Parallel group failed with errors: {err_summary}"
+                    )
+                if parallel_group in self._parallel_groups:
+                    self._parallel_groups.remove(parallel_group)
+            else:
+                await self.executor.run_step_async(
+                    step_name=step_name,
+                    input_map=input_map,
+                    retry_override=retry_override,
+                    timeout=step_timeout,
+                )
+                executed_steps.add(step_name)
+
+        return self.ctx.step_outputs

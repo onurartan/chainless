@@ -152,6 +152,52 @@ flow = TaskFlow(name="LoggedFlow", on_step_complete=log_step)
 
 ---
 
+## 🆕 New Features
+
+### 🔁 Advanced Step Controls
+
+Each `step()` now supports fine-grained execution control:
+
+- `step_name`: Define a custom name for the step (useful for reusing agents).
+- `timeout`: Set a timeout in seconds for the step.
+- `on_start`, `on_complete`, `on_error`: Step-level hooks for better control and observability.
+- `condition`: A boolean-returning function to decide whether the step should run.
+- `depends_on`: Specify other steps that must complete before this one runs.
+
+**Example:**
+
+```python
+flow.step(
+    "summarizer",
+    input_map={"text": "{{input}}"},
+    step_name="brief_summary",
+    timeout=10,
+    on_start=lambda: print("Starting summary..."),
+    on_complete=lambda result: print(f"Done: {result}"),
+    condition=lambda ctx: ctx["input"] is not None,
+    depends_on=["fetch"]
+)
+```
+
+---
+
+### 🏷️ Alias Creation
+
+You can now define aliases for specific keys in a step’s output. This makes your input mappings cleaner and more maintainable.
+
+**Usage:**
+
+```python
+flow.alias("summary", from_step="summarizer", key="text")
+flow.step("translator", input_map={"text": "{{summary}}"})
+```
+
+Instead of referencing `{{summarizer.text}}`, you can now use the simplified `{{summary}}`.
+
+---
+
+---
+
 ## ✅ Best Practices
 
 - Keep agents focused (1 purpose per agent)

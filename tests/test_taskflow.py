@@ -1,6 +1,7 @@
 from chainless import Tool, Agent, TaskFlow
 from langchain_deepseek import ChatDeepSeek
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -83,7 +84,7 @@ def test_taskflow_multi_source_summary_report():
         }
 
     # --------- TaskFlow Definition --------- #
-    flow = TaskFlow("MultiSourceSummaryReport")
+    flow = TaskFlow("MultiSourceSummaryReport", verbose=True)
 
     flow.add_agent("wiki", wiki_agent)
     flow.add_agent("yt", yt_agent)
@@ -116,3 +117,162 @@ def test_taskflow_multi_source_summary_report():
     assert result["output"]["topic"] == "Python"
     assert "popular programming language" in result["output"]["wikipedia"]
     assert "define variables" in result["output"]["youtube"]
+
+
+def test_taskflow_with_all_advanced_features():
+    # ----------------- Mock Tool Functions ----------------- #
+    def mock_data_api(query: str):
+        return f"Data for {query}"
+
+    # ----------------- Tools ----------------- #
+    data_tool = Tool("DataTool", "Returns mock data", mock_data_api)
+
+    # ----------------- LLM ----------------- #
+    llm = ChatDeepSeek(model="deepseek-chat")
+
+    # ----------------- Agents ----------------- #
+    fetch_agent = Agent(
+        name="FetchAgent",
+        llm=llm,
+        tools=[data_tool],
+        system_prompt="Fetch data for given topic.",
+    )
+
+    transform_agent = Agent(
+        name="TransformAgent",
+        llm=llm,
+        system_prompt="Transform the fetched data into a better format.",
+    )
+
+    condition_agent = Agent(
+        name="ConditionAgent",
+        llm=llm,
+        system_prompt="This step should only run if the fetched data contains 'RunMe'.",
+    )
+
+    flaky_agent = Agent(
+        name="FlakyAgent",
+        llm=llm,
+        system_prompt="Fails once, succeeds on retry.",
+    )
+
+    slow_agent = Agent(
+        name="SlowAgent",
+        llm=llm,
+        system_prompt="Intentionally slow agent.",
+    )
+
+    final_agent = Agent(
+        name="FinalAgent",
+        llm=llm,
+        system_prompt="Combine everything into a final report.",
+    )
+
+    # ----------------- Custom Start Mocks ----------------- #
+    @fetch_agent.custom_start
+    def fetch_start(input, tools, system_prompt):
+        return {"output": f"Fetched: {input} RunMe"}
+
+    @transform_agent.custom_start
+    def transform_start(input, tools, system_prompt):
+        return input.replace("Fetched:", "Transformed:")
+
+    @condition_agent.custom_start
+    def condition_start(input, tools, system_prompt):
+        assert "RunMe" in input
+        return "Condition met and step executed."
+
+    retry_counter = {"count": 0}
+
+    @flaky_agent.custom_start
+    def flaky_start(input, tools, system_prompt):
+        if retry_counter["count"] < 1:
+            retry_counter["count"] += 1
+            raise Exception("Temporary error.")
+        return "Recovered after retry."
+
+    @slow_agent.custom_start
+    def slow_start(input, tools, system_prompt):
+        time.sleep(0.1)  # Mock delay
+        return "Completed despite delay."
+
+    @final_agent.custom_start
+    def final_start(fetch, transform, condition, flaky, slow, tools, system_prompt):
+        return {
+            "fetch": fetch,
+            "transform": transform,
+            "condition": condition,
+            "flaky": flaky,
+            "slow": slow,
+        }
+
+    def increment_retry(step_name, user_input):
+        print(
+            f" {step_name} ->  Retry counter before increment: {retry_counter['count']}"
+        )
+        retry_counter["count"] += 1
+        print(f"{step_name} -> Retry counter after increment: {retry_counter['count']}")
+
+    # ----------------- TaskFlow Setup ----------------- #
+    flow = TaskFlow("AdvancedFlow", verbose=True, on_step_start=increment_retry)
+
+    flow.add_agent("fetcher", fetch_agent)
+    flow.add_agent("transform", transform_agent)
+    flow.add_agent("condition_check", condition_agent)
+    flow.add_agent("flaky", flaky_agent)
+    flow.add_agent("slow", slow_agent)
+    flow.add_agent("final", final_agent)
+
+    flow.step("fetcher", input_map={"input": "{{input}}"}, step_name="data_fetcher")
+    flow.alias("data_fetcher", "data_fetcher", "output.output")
+
+    flow.step(
+        "transform",
+        input_map={"input": "{{data_fetcher}}"},
+        depends_on=["data_fetcher"],
+    )
+
+    flow.step(
+        "condition_check",
+        input_map={"input": "{{data_fetcher}}"},
+        depends_on=["data_fetcher"],
+        on_start=increment_retry,
+        condition=lambda steps: "RunMe" in steps["data_fetcher"]["output"]["output"],
+    )
+
+    flow.step(
+        "flaky",
+        input_map={"input": "{{data_fetcher}}"},
+        depends_on=["data_fetcher"],
+        retry_on_fail=3,
+    )
+
+    flow.step(
+        "slow",
+        input_map={"input": "{{data_fetcher}}"},
+        depends_on=["data_fetcher"],
+        timeout=1,  # Mocked as very short
+    )
+
+    flow.step(
+        "final",
+        input_map={
+            "fetch": "{{data_fetcher}}",
+            "transform": "{{transform.output}}",
+            "condition": "{{condition_check.output}}",
+            "flaky": "{{flaky.output}}",
+            "slow": "{{slow.output}}",
+        },
+        depends_on=["transform", "condition_check", "flaky", "slow"],
+    )
+
+    # ----------------- Run TaskFlow ----------------- #
+    result = flow.run("AI")
+
+    # ----------------- Assertions ----------------- #
+    assert isinstance(result["output"], dict)
+    assert "fetch" in result["output"]
+    assert result["output"]["flaky"] == "Recovered after retry."
+    assert "Transformed:" in result["output"]["transform"]
+    assert "Condition met" in result["output"]["condition"]
+    assert "delay" in result["output"]["slow"]

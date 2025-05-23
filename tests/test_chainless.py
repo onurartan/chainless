@@ -88,9 +88,17 @@ def test_agent():
 
     result = sum_agent.start("What is 5+6 sum tool should be used")
 
+    agent_descibe = sum_agent.describe()
+    tooled_agent = sum_agent.as_tool()
+    export_tools_schema = sum_agent.export_tools_schema()
+
     assert result["output"]
     assert result["output"].total == 11
     assert sum_agent.name == "SumAgent"
+    assert agent_descibe.get("name", None) == "SumAgent"
+    assert tooled_agent.name == "SumAgent"
+    assert export_tools_schema.get("agent_name", None) == "SumAgent"
+    assert len(export_tools_schema.get("tools", 0)) == 1
     assert sum_agent.system_prompt == "agent adding numbers."
 
 
