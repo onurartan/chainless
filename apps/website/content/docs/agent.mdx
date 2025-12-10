@@ -1,0 +1,368 @@
+---
+title: Agent
+description: Build and run LLM agents with tools, hooks, and structured outputs.
+---
+
+## Agent
+
+The **Agent** is the core abstraction of the Chainless framework.  
+It provides a unified interface for interacting with LLMs, executing tools, validating output,  
+and defining fully customized reasoning workflows.
+
+An Agent can:
+
+- handle tools (sync/async)  
+- run with retries, output validation, and message history processors  
+- override execution with a custom startup function (`on_start`)  
+- generate dynamic system prompts  
+- export itself as a tool for multi-agent pipelines  
+- execute synchronously or asynchronously  
+
+Agents form the foundation of higher-level components such as TaskFlow and FlowServer.
+
+---
+
+# Overview
+
+A Chainless Agent wraps three major components:
+
+1. **Model Execution Layer**  
+   Powered by **PydanticAI** (`PydanticAgent`).  
+   Used when you call `run()` or `run_async()`.
+
+2. **Optional LangChain Compatibility Layer**  
+   Powered by `AgentExecutor` + LangChain tool-calling agent.  
+   Used only by deprecated `start()` / `start_async()`.
+
+3. **Custom Execution Layer**  
+   Activated when you define `@agent.on_start`.  
+   This replaces the default reasoning pipeline entirely.
+
+---
+
+# Creating an Agent
+
+```python
+from chainless import Agent, ModelNames
+
+agent = Agent(
+    name="translator",
+    model=ModelNames.GEMINI_GEMINI_2_0_FLASH,
+)
+```
+
+### Key Parameters
+
+| Param                  | Explanation                                                 |
+| ---------------------- | ----------------------------------------------------------- |
+| **name**               | Unique identifier of the agent                              |
+| **model**              | Chainless model (PydanticAI backend)                        |
+| **llm**                | LangChain chat model (only for deprecated `.start()`)       |
+| **tools**              | List of `Tool` objects                                      |
+| **response_format**    | `str` (default), Pydantic `BaseModel`, or dict              |
+| **system_prompt**      | Initial system message                                      |
+| **instructions**       | Supplemental instructions sent to the model                 |
+| **prepare_tools**      | Function that dynamically filters or modifies tools per run |
+| **retries**            | Automatic retry logic for model failures                    |
+| **output_retries**     | Retries on output validation failures                       |
+| **history_processors** | Functions that preprocess message history                   |
+| **on_start**           | Fully custom execution entry point                          |
+
+---
+
+# System Prompt & Instructions
+
+Agents support both static and dynamic system prompts.
+
+## Static prompt
+
+```python
+agent = Agent(
+    name="helper",
+    system_prompt="You are a precise and concise assistant."
+)
+```
+
+## Dynamic prompt
+
+You can generate the prompt at initialization:
+
+```python
+@agent.set_system_prompt
+def make_prompt():
+    return "You are a domain expert in mathematics."
+```
+
+If the function returns `None`, the prompt is not overridden.
+
+---
+
+# Tools
+
+Tools are Python callables exposed to the agent.
+
+## Registering a tool
+
+```python
+@agent.tool(name="greet", description="Greets someone by name")
+def greet_user(name: str):
+    return f"Hello {name}!"
+```
+
+### How it works
+
+* the function signature is converted into a JSON schema
+* the tool is registered in three forms:
+
+  * internal metadata
+  * LangChain-compatible tool
+  * PydanticAI-compatible tool
+* tools automatically refresh agent metadata
+
+---
+
+# Dynamic Tool Preparation
+
+You can dynamically filter or modify tools before each run using `prepare_tools`.
+
+```python
+def filter_tools(tools):
+    # Example: disable all tools during certain queries
+    return [t for t in tools if t.name != "dangerous_op"]
+
+agent = Agent(
+    name="safe_agent",
+    prepare_tools=filter_tools,
+)
+```
+
+The returned tool list is used ONLY for that execution.
+
+---
+
+# Custom Start
+
+You can override the entire execution pipeline using `@agent.on_start`.
+
+This is ideal for:
+
+* full manual decision-making
+* orchestration of custom reasoning steps
+* manual tool execution
+* multi-agent coordination
+
+## Example
+
+```python
+@agent.on_start
+async def logic(ctx):
+    # ctx contains: input, system_prompt, tools, model_id, llm, extra_inputs
+    sp = ctx.system_prompt
+    llm = ctx.llm
+
+    # You can call the model manually:
+    result = await llm.apredict(sp + "\n" + ctx.input)
+
+    return result
+```
+
+When `on_start` is defined:
+
+> **The default model execution is bypassed entirely.**
+
+What you return becomes the final agent output.
+
+---
+
+# Running the Agent
+
+## Sync mode
+
+```python
+result = agent.run("Translate this to French")
+print(result.output)
+```
+
+## Async mode
+
+```python
+result = await agent.run_async("Translate this to French")
+```
+
+These methods are wrappers over **PydanticAI**.
+
+### Output
+
+`AgentResponse` contains:
+
+* `output` — final output (validated if using a model)
+* `usage` — token usage, if available
+* `tools_used` — list of executed tools from `ToolExecutionTracker`
+
+---
+
+# Using Models
+
+### Model is required unless you are using a deprecated LangChain flow.
+
+```python
+agent = Agent(
+    name="example",
+    model=ModelNames.GEMINI_GEMINI_2_0_FLASH
+)
+```
+
+You can override the model per call:
+
+```python
+agent.run("Hello", model=ModelNames.GEMINI_GEMINI_2_0_FLASH)
+```
+
+---
+
+# LangChain Compatibility (Deprecated)
+
+The `start()` and `start_async()` methods allow using a LangChain tool-calling agent.
+
+```python
+result = agent.start("Hello")
+```
+
+Limitations:
+
+* requires `llm` to be provided
+* will be removed in future versions
+* replaced entirely by `run()` / `run_async()`
+
+---
+
+# History Processors
+
+You can modify message history before it is sent to the model.
+
+Example:
+
+```python
+def truncate(history):
+    return history[-5:]
+
+agent = Agent(
+    name="chatbot",
+    history_processors=[truncate]
+)
+```
+
+Processors run sequentially and must return a list of messages.
+
+---
+
+# Multi-Agent Pipelines
+
+Agents can become tools using `.as_tool()` or `.as_tool_async()`.
+
+## Example
+
+```python
+summarizer = Agent(name="summarizer")
+
+router = Agent(name="router")
+
+router.tools.append(summarizer.as_tool("Summarize text"))
+```
+
+Calling `router.run(...)` may internally run `summarizer`.
+
+---
+
+# Example: Complete Agent
+
+```python
+from chainless import Agent, ModelNames
+
+agent = Agent(
+    name="math_agent",
+    model=ModelNames.GEMINI_GEMINI_2_0_FLASH,
+    instructions="Respond with mathematical accuracy."
+)
+
+@agent.tool(name="double")
+def double(x: int):
+    return x * 2
+
+@agent.on_start
+async def logic(ctx):
+    # manually call tool
+    tools = {t.name: t for t in ctx.tools}
+
+    if "double" in tools:
+        doubled = tools["double"].func(x=21)
+        return f"Doubled result: {doubled}"
+
+    return "No tools available."
+
+result = await agent.run_async("test")
+print(result.output)
+```
+
+---
+
+# API Reference (Simplified but Complete)
+
+### `Agent(...)`
+
+Constructor. Registers tools, model, prompt, instructions, retries, processors, and custom start.
+
+### `@agent.tool(name=None, description=None)`
+
+Registers a function as a tool.
+
+### `@agent.set_system_prompt`
+
+Defines a dynamic system prompt.
+
+### `@agent.on_start`
+
+Overrides agent execution.
+
+### `agent.run(input, ...)`
+
+Synchronous execution (PydanticAI backend).
+
+### `agent.run_async(input, ...)`
+
+Asynchronous execution.
+
+### `agent.start()` / `agent.start_async()`
+
+Deprecated LangChain-based execution.
+
+### `agent.as_tool(description=None)`
+
+Expose agent as a synchronous tool.
+
+### `agent.as_tool_async(description=None)`
+
+Expose agent as an asynchronous tool.
+
+### `agent.export_tools_schema()`
+
+Returns schema metadata for all tools.
+
+### `agent.get_metadata()`
+
+Returns metadata: name, system prompt, tools, tool count.
+
+---
+
+# Summary
+
+The Chainless Agent is:
+
+* simple to use
+* powerful when needed
+* tool-aware
+* customizable
+* compatible with both modern PydanticAI and legacy LangChain workflows
+* ideal for orchestrated multi-agent pipelines
+
+This structure allows you to build everything from simple assistants to fully custom reasoning systems.

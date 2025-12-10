@@ -1,0 +1,102 @@
+---
+title: "Quickstart"
+description: "Build your first AI agent with Chainless in under 2 minutes."
+icon: "rocket"
+---
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+## Build Your First Chainless Agent
+
+This quickstart will show you how to build an AI agent with Chainless, use a tool, and orchestrate execution with TaskFlow.
+
+Before starting, install Chainless and set up your preferred LLM provider.  
+If you have not installed it yet, follow the installation guide.
+
+<Steps>
+  <Step title="Set Your API Key">
+    Chainless works with multiple LLM providers such as OpenAI, Anthropic, and Gemini.  
+    In this example we configure OpenAI.
+
+<Tabs items={['Python', 'Mac', 'Windows']}>
+  <Tab>
+  ```python Python
+      import os
+
+      os.environ["OPENAI_API_KEY"] = "sk-***"
+      ```
+  </Tab>
+  <Tab>
+    ```bash Mac
+      export OPENAI_API_KEY=sk-***
+      ```
+  </Tab>
+    <Tab>
+    ```powershell Windows
+      setx OPENAI_API_KEY sk-***
+      ```
+  </Tab>
+</Tabs>
+
+  </Step>
+
+  <Step title="Define a Tool Function">
+    Tools are regular Python functions wrapped with metadata so agents can call them.
+
+    ```python
+    from chainless import Tool
+
+    @Tool.tool(
+        name="web_search",
+        description="Returns a simulated web search result."
+    )
+    def web_search(query: str):
+        return f"Simulated search result for: {query}"
+    ```
+  </Step>
+
+  <Step title="Create Your Agent">
+    Agents use LLMs, tools, prompts and structured outputs to perform tasks.
+
+    ```python
+    from chainless import Agent
+    from chainless.models import ModelNames
+
+    agent = Agent(
+        name="ResearchAgent",
+        model=ModelNames.OPENAI_GPT_4O,
+        tools=[web_search],
+        system_prompt="Use the web_search tool whenever the user asks for information."
+    )
+    ```
+  </Step>
+
+  <Step title="Run the Agent">
+    Invoke the agent directly using `run()` or `run_async()`.
+
+    ```python
+    result = agent.run("Search the latest AI breakthroughs.")
+    print(result.output)
+    ```
+  </Step>
+
+  <Step title="Build a Multi Step Workflow With TaskFlow">
+    TaskFlow allows multi agent logic, routing, and orchestration.
+
+    ```python
+    from chainless import TaskFlow
+
+    flow = TaskFlow("AI Research Flow", verbose=True)
+
+    flow.add_agent("Research", agent)
+
+    flow.step(
+        "Research",
+        input_map={"input": "{{input}}"}
+    )
+
+    result = flow.run("Give me updates about robotics research.")
+    print(result.output)
+    ```
+  </Step>
+</Steps>

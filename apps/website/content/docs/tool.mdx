@@ -1,0 +1,271 @@
+---
+title: Tool
+description: Tools are how Chainless integrates external logic, APIs, computations, and utilities into LLM reasoning.
+---
+
+## Tool
+
+The **Tool** class wraps a Python function (sync or async) into a structured,  
+schema-validated, execution-tracked callable for Agents.
+
+Tools are how Chainless integrates external logic, APIs, computations, and utilities into LLM reasoning.
+
+---
+
+# Overview
+
+A Tool provides:
+
+- **Input validation** with Pydantic  
+- **Sync or async execution**  
+- **Structured metadata** (name, description, schema)  
+- **Execution tracking** (`ToolExecutionTracker`)  
+- **Unified interface** for Agents, PydanticAI, and LangChain  
+
+Tools can be created manually or via the `@Tool.tool` decorator.
+
+---
+
+# Creating a Tool
+
+## 1. Using the decorator
+
+```python
+from chainless import Tool
+
+@Tool.tool(description="Adds two numbers")
+def add(a: int, b: int):
+    return a + b
+````
+
+This instantly turns `add()` into a fully featured Tool.
+
+## 2. With a Pydantic input schema
+
+```python
+from pydantic import BaseModel
+
+class AddInput(BaseModel):
+    a: int
+    b: int
+
+@Tool.tool(input_schema=AddInput)
+def add(a: int, b: int):
+    return a + b
+```
+
+---
+
+# Manual Tool Creation
+
+```python
+def greet(name: str):
+    return f"Hello {name}"
+
+greet_tool = Tool(
+    name="greet",
+    description="Greets a user",
+    func=greet,
+)
+```
+
+---
+
+# Input Validation
+
+If a Pydantic schema is provided:
+
+* data is validated before execution
+* invalid input raises `ToolInputValidationError`
+
+```python
+class UserInput(BaseModel):
+    id: int
+
+@Tool.tool(input_schema=UserInput)
+def get_user(id: int):
+    ...
+```
+
+If validation fails:
+
+```text
+ToolInputValidationError: Input validation failed:
+Field `id` error: ...
+```
+
+---
+
+# Execution
+
+A tool is executed using `.execute()` or simply by calling it:
+
+```python
+result = add.execute({"a": 3, "b": 4})
+```
+
+or
+
+```python
+result = add(a=3, b=4)
+```
+
+Both work the same.
+
+### Sync tools
+
+Called directly.
+
+### Async tools
+
+Automatically run inside an `anyio` event loop:
+
+```python
+@Tool.tool()
+async def fetch(url: str):
+    return await http_get(url)
+```
+
+The agent does not need to know whether a tool is sync or async.
+
+---
+
+# Error Handling
+
+Tools can fail in two ways:
+
+### 1. Input validation errors
+
+Raise `ToolInputValidationError`.
+
+### 2. Runtime errors
+
+If `raise_on_error=True` (default), exceptions propagate.
+Otherwise, the error is logged and `None` is returned.
+
+```python
+@Tool.tool(raise_on_error=False)
+def risky(x: int):
+    return 1 / x  # can fail
+```
+
+---
+
+# Execution Tracking
+
+All tool runs are recorded by `ToolExecutionTracker`.
+
+Tracked data includes:
+
+* tool name
+* start / end timestamps
+* duration
+* input
+* output
+* failure reason
+
+You can access the list with:
+
+```python
+from chainless import ToolExecutionTracker
+
+ToolExecutionTracker.get()
+```
+
+---
+
+# Metadata
+
+Each tool can describe itself:
+
+```python
+metadata = add.describe()
+```
+
+Example output:
+
+```python
+{
+    "name": "add",
+    "description": "Adds two numbers",
+    "parameters": {
+        "a": {"type": "integer"},
+        "b": {"type": "integer"}
+    }
+}
+```
+
+Used by agents for planning and adaptive reasoning.
+
+---
+
+# PydanticAI Compatibility
+
+Tools can be converted into PydanticAI tools:
+
+```python
+pyd_tool = add.convert_tool_to_pydanticai()
+```
+
+Used internally by the Agent’s PydanticAI execution pipeline.
+
+---
+
+# LangChain Compatibility
+
+```python
+lc_tool = add.convert_tool_to_langchain()
+```
+
+Used by the deprecated LangChain-based execution (`agent.start()`).
+
+---
+
+# Tool as a Callable
+
+A Tool can be called like a function:
+
+```python
+add(a=3, b=4)
+```
+
+This is equivalent to:
+
+```python
+add.execute({"a": 3, "b": 4})
+```
+
+---
+
+# Complete Example
+
+```python
+from chainless import Tool
+from pydantic import BaseModel
+
+class MathInput(BaseModel):
+    x: int
+    y: int
+
+@Tool.tool(name="Multiply", description="Multiply two numbers", input_schema=MathInput)
+def multiply(x: int, y: int):
+    return x * y
+
+result = multiply(x=6, y=7)
+print(result)  # 42
+```
+
+---
+
+# Summary
+
+The Tool class gives Chainless:
+
+* reliable input validation
+* proper error handling
+* unified execution flow
+* deep integration with Agents
+* compatibility across backends
+* clean metadata for planning and routing
+
+Tools are the fundamental building blocks for giving LLM agents real computational abilities.

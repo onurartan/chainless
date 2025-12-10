@@ -1,0 +1,338 @@
+---
+title: Getting Started
+description: Composable agents. Flexible task flows. One lightweight framework.
+---
+
+### Introduction
+
+**Composable agents. Flexible task flows. One lightweight framework.**
+
+Chainless is a lightweight, modular framework designed to build task-oriented AI agents and orchestrate them in intelligent, multi-step flows. It provides a simple, Python-native way to define **Agents** (the LLM-powered reasoning units), **Tools** (external functions), and **TaskFlows** (the orchestration engine) in a composable and scalable manner.
+
+It is ideal for both rapid prototyping and deploying production-grade, server-backed AI pipelines.
+
+### Core Features
+
+| Feature | Description | Key Benefits |
+| :--- | :--- | :--- |
+| **Modular Agents** | Define self-contained units powered by an LLM, capable of utilizing tools and internal reasoning. | Easy to design, test, and maintain complex AI logic. |
+| **Composable TaskFlows** | Connect agents in flexible sequences or parallel blocks, with robust data routing and mapping. | Orchestrate end-to-end multi-step processes for complex tasks like customer support workflows. |
+| **Native Python Tools** | Register any standard Python callable (sync or async) with metadata for agent usage. | Seamless integration with existing codebases and external systems. |
+| **Memory Management** | Integrate session or conversation history directly into Agent or TaskFlow execution. | Enable stateful, long-running conversational applications. |
+| **FlowServer** | Optional component to expose TaskFlows as a ready-to-use API endpoint. | Simplify deployment and enable external service access to your AI flows. |
+
+### Installation
+
+```bash
+pip install chainless
+```
+
+### Quick Example
+
+The following code demonstrates defining a Tool, wrapping it in an Agent, and orchestrating the process with a TaskFlow:
+
+```python
+from chainless import Tool, Agent, TaskFlow
+
+def greet(name: str):
+    return f"Hello, {name}!"
+
+tool = Tool("Greeter", "Greets the user", greet)
+agent = Agent("WelcomeAgent", tools=[tool])
+
+flow = TaskFlow("GreetFlow")
+flow.add_agent("WelcomeAgent", agent)
+flow.step("WelcomeAgent", input_map={"input": "{{input}}"})
+
+# The agent uses the tool to greet the input 'Alice'
+print(flow.run("Alice").output) 
+# Output: "Hello, Alice!"
+```
+
+-----
+
+## Agent: The Core Reasoning Unit
+
+The **Agent** is the central component in Chainless, representing a large language model (LLM) configured for a specific role or task.
+
+### Agent Definition
+
+An Agent is initialized with a name and a set of instructions (**system\_prompt**). It can be configured with **Tools** and a **response\_format** to enforce structured output.
+
+```python
+from chainless import Agent
+from pydantic import BaseModel
+
+class ClassifierOutput(BaseModel):
+    category: str
+    reason: str
+
+classifier_agent = Agent(
+    name="IssueClassifier",
+    system_prompt=(
+        "Task: Accurately categorize the user's complaint.\n"
+        "Categories: 'billing', 'technical', 'account', 'other'.\n"
+        "State the reason clearly."
+    ),
+    response_format=ClassifierOutput,
+)
+```
+
+### Tool Usage
+
+Agents can be equipped with a list of **Tool** objects, which the LLM can decide to use to fulfill its task. Tools are dynamically presented to the LLM, enabling complex reasoning and interaction with external systems.
+
+```python
+solution_agent = Agent(
+    name="SolutionGenerator",
+    tools=[status_tool, account_tool], # Tools are passed to the agent
+    system_prompt=(
+        "Task: Generate an appropriate solution for the user's request.\n"
+        "Use SystemStatusTool or UserAccountTool if necessary.\n"
+        "Present the solution clearly and understandably."
+    ),
+    response_format=SolutionOutput,
+)
+```
+
+### Hooks
+
+Agents support **pre-hooks** and **post-hooks** for executing custom logic before and after the LLM call.
+
+| Hook Type | Function | Example Use Case |
+| :--- | :--- | :--- |
+| **Pre-hook** | Runs before the Agent processes the input. | Input cleaning, format conversion, or prompt injection. |
+| **Post-hook** | Runs after the Agent generates an output. | Output validation, adding metadata, or final formatting. |
+
+```python
+# Pre-hook: Clean the input
+async def clean_input_hook(user_input, agent):
+    return user_input.strip()
+
+# Running the agent with hooks
+response = await agent.run_async(
+    user_input,
+    pre_hooks=[clean_input_hook],
+    # ...
+)
+```
+
+-----
+
+## Tool: Interacting with the World
+
+A **Tool** is a wrapper around a Python callable (function or coroutine) that provides metadata for the Agent to understand its purpose and how to use it.
+
+### Tool Registration
+
+Tools can be registered explicitly using the `Tool` class or via a decorator (`@Tool.tool`).
+
+#### Tool Definitions from Examples
+
+```python
+# ----------------------------
+# Tools
+# ----------------------------
+class SystemName(str, Enum):
+    MAIL_SERVER = "mail_server"
+    PAYMENT_GATEWAY = "payment_gateway"
+    DATABASE = "database"
+
+def check_system_status(system_name: SystemName):
+    # This is an internal function, comments omitted for documentation clarity
+    # ...
+    pass
+
+async def get_user_account_info(user_id: str):
+    """Returns the user's current status and plan information."""
+    # ...
+    pass
+
+# Explicit Tool Registration
+status_tool = Tool(
+    "SystemStatusTool",
+    "Checks the operational status of the specified system and reports its current condition.",
+    check_system_status,
+)
+account_tool = Tool(
+    "UserAccountTool",
+    "Retrieves the account status and plan for the specified user.",
+    get_user_account_info,
+)
+```
+
+#### Decorator Registration with Type-Safe Arguments
+
+The decorator method is useful for concise registration. The tool's description guides the Agent's reasoning.
+
+```python
+from chainless import Tool
+
+@Tool.tool(
+    name="ask_user_name", 
+    description="Use this tool to ask the user for their name."
+)
+def ask_user_name():
+    new_name = input("Hello! Could I please get your name first? ")
+    return new_name
+
+@Tool.tool(name="greet_user", description="Takes the user's name and greets them.")
+def greet_user(user_name: str):
+    return f"Hello {user_name}! How are you today?"
+```
+
+### Structured Tool Arguments
+
+The Agent automatically uses the function signature (type hints) of the wrapped callable to structure its arguments for tool invocation.
+
+```python
+class DoSomethingType(Enum):
+    Plus = "plus"
+    Minus = "minus"
+
+@agent.tool(
+    name="do_something",
+    description="You MUST use this tool when addition or subtraction operations are requested. Do not use internal logic.",
+)
+def do_something(
+    numbers: list[int] = [], 
+    type: DoSomethingType = DoSomethingType.Plus
+) -> int:
+    # ... implementation (shows custom arithmetic logic)
+    if type == DoSomethingType.Plus:
+        return sum(numbers) - 2
+    # ...
+```
+
+-----
+
+## TaskFlow: Orchestration Engine
+
+The **TaskFlow** is the mechanism for orchestrating multiple Agents and their interactions in a predefined sequence, defining a clear data pipeline.
+
+### Flow Construction
+
+A TaskFlow is created and agents are added to it with unique step names.
+
+```python
+support_flow = TaskFlow("SupportFlow", verbose=True)
+support_flow.add_agent("Classifier", classifier_agent)
+support_flow.add_agent("Solution", solution_agent)
+support_flow.add_agent("Report", report_agent)
+```
+
+### Defining Steps and Data Mapping
+
+The core of a TaskFlow is the **step** definition, which links an Agent to the flow and defines how data flows between steps.
+
+| Concept | Description | Syntax Example |
+| :--- | :--- | :--- |
+| **Step** | Executes an Agent with a defined set of inputs. | `support_flow.step("Classifier", ...)` |
+| **Input Mapping** | A dictionary that maps external input or previous step outputs to the current step's input. | `input_map={"category": "{{Classifier.output.category}}", "details": "{{input}}"}` |
+| **Output Access** | Outputs from previous steps are accessed using Jinja-style template syntax. | `{{Classifier.output.category}}` |
+| **Prompt Template** | A Jinja template used to construct the final prompt for the Agent, incorporating mapped data. | `prompt_template="...Details: {{details}}..."` |
+
+### Example Step Configuration (Translated)
+
+```python
+# Step 1: Classification
+support_flow.step("Classifier", input_map={"input": "{{input}}"})
+
+# Step 2: Solution Generation (using output from Step 1)
+support_flow.step(
+    "Solution",
+    step_name="SolutionStep1",
+    input_map={"category": "{{Classifier.output.category}}", "details": "{{input}}"},
+    prompt_template="""
+A support request was received in the {{category}} category.
+Details: {{details}}
+
+Please propose an appropriate solution. Use the following tools if necessary:
+1. SystemStatusTool: Provides information about system status and performance.
+2. UserAccountTool: Fetches user account details.
+""",
+)
+
+# Step 3: Final Report Generation (using output from Steps 1 and 2)
+support_flow.step(
+    "Report",
+    input_map={
+        "category": "{{Classifier.output.category}}",
+        "solution": "{{SolutionStep1.output.solution}}",
+    },
+    prompt_template="""
+Support Request Report:
+Category: {{category}}
+Solution: {{solution}}
+Please use this information to present a comprehensive report to the user.
+    """,
+)
+```
+
+-----
+
+## Memory: State Management
+
+The **Memory** component is used to manage and retrieve message history, enabling stateful, conversational interactions for an Agent or TaskFlow.
+
+### Usage
+
+Memory objects store user and assistant messages. The stored history can be passed to an Agent's `run_async` method or set as the `message_history` for a specific step in a TaskFlow.
+
+```python
+from chainless.memory import Memory
+
+async def main():
+    memory = Memory()
+    while True:
+        user_input = input("Describe your problem (type 'exit' to quit): ")
+        if user_input.lower() == "exit":
+            break
+
+        memory.add_user(content=user_input)
+
+        # Pass the history to the Agent or Flow Step
+        support_flow.ctx._get_step_by_name("Report").message_history = memory.get()
+
+        result = await support_flow.run_async(user_input)
+        output = result.output
+
+        memory.add_assistant(content=output)
+        print("\n--- Final Report ---")
+        print(output)
+```
+
+-----
+
+## FlowServer: API Deployment
+
+**FlowServer** provides an easy way to serve a configured TaskFlow as a lightweight, production-ready REST API endpoint. This is part of the `chainless.exp` (experimental) module.
+
+### Server Setup
+
+By using `TaskFlow.serve()`, a TaskFlow can be wrapped into an endpoint object, which is then used to initialize and run the `FlowServer`.
+
+```python
+from chainless.exp.server import FlowServer
+# TaskFlow and Agents must be defined above this point
+
+# Create the endpoint definition
+support_endpoint = support_flow.serve(path="/support", name="Support Flow")
+
+# Initialize and run the server
+# The api_key is required for security
+server = FlowServer(endpoints=[support_endpoint], port=8080, api_key="example_key")
+
+if __name__ == "__main__":
+    server.run()
+```
+
+### Deployment and Access
+
+| Parameter | Description |
+| :--- | :--- |
+| **`endpoints`** | A list of `FlowEndpoint` objects, each corresponding to a TaskFlow to be served. |
+| **`port`** | The port on which the server will listen for incoming requests. |
+| **`api_key`** | A required security key to authenticate external service access. |
+
+Once running, the TaskFlow is accessible via HTTP POST requests to the defined path (e.g., `http://localhost:8080/support`), with the input provided as a JSON payload.

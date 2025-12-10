@@ -1,0 +1,129 @@
+---
+title: Contributing
+---
+
+import Link from "next/link";
+import { GITHUB_REPO_URL } from "../../constants/config";
+
+Thank you for your interest in contributing to **Chainless**.  
+Every bug fix, improvement, documentation update, and new idea helps the project grow.
+
+Chainless is a Python-only framework, so contributions revolve around Python code quality, tooling, FlowServer improvements, examples, and documentation.
+
+---
+
+## How to Contribute
+
+1. **Fork** the repository and create a descriptive branch  
+   Example: `feat/tool-tracking`, `fix/async-agent-bug`, `docs/flowserver`.
+2. Implement your changes in a focused, well-scoped way.  
+   Avoid mixing unrelated edits in the same PR.
+3. Add or update **tests** when necessary.
+4. Run tests locally before opening a PR.
+5. Open a **pull request** against `main` with:
+   - What you changed  
+   - Why it matters  
+   - Example usage if applicable
+
+This keeps the review process fast and clean.
+
+---
+
+## Project Structure (High-Level Overview)
+
+Although Chainless evolves quickly, the core layout is usually:
+
+- `chainless/agent` — Agent system  
+- `chainless/tool` — Tool wrapper  
+- `chainless/taskflow` — TaskFlow engine  
+- `chainless/exp/server` — FlowServer  
+- `chainless/schemas` — Pydantic models  
+- `tests/` — test suite  
+- `apps/website/content/docs` — documentation pages  
+- `examples/` — real-world usage examples
+
+If you're unsure where your contribution fits, feel free to open an issue first.
+
+---
+
+## Coding Guidelines
+
+- **Python 3.9+** is required  
+- Follow PEP8 standards  
+- Prefer clear, readable code over clever tricks  
+- Keep functions small and maintainable  
+- Document public APIs and add docstrings  
+- Avoid unnecessary abstractions — Chainless is meant to stay lightweight
+
+---
+
+## Documentation Contributions
+
+Docs live in the `apps/website/content/docs/` directory as MDX files.
+
+Improvements you can make:
+
+- Fix unclear explanations  
+- Add missing examples  
+- Expand FlowServer or TaskFlow tutorials  
+- Clarify errors, edge cases, or tool behavior  
+- Improve English phrasing or formatting
+
+Documentation PRs are always welcome and often the easiest way to start contributing.
+
+---
+
+## Tests
+
+When fixing bugs or adding features:
+
+- Add a minimal test case that reproduces the issue  
+- Place tests under `tests/`  
+- Keep tests simple and descriptive  
+- Use realistic input/output whenever possible
+
+Tests help prevent regressions and ensure Chainless remains stable.
+
+---
+
+## Issues & Feature Requests
+
+You can open issues for:
+
+- Bugs  
+- Missing features  
+- Proposals for improvements  
+- Questions about design decisions  
+
+Provide details like:
+
+- A reproducible code snippet  
+- Expected vs actual behavior  
+- Python version  
+- Chainless version
+
+Clear reports lead to faster fixes.
+
+<Link href={GITHUB_REPO_URL + "/issues"} target="_blank" className="text-primary underline">
+  Go to GitHub Issues
+</Link>
+
+---
+
+## Pull Requests
+
+Before submitting a PR:
+
+- [ ] Code is formatted and readable  
+- [ ] Tests added or updated  
+- [ ] Docs updated if you changed public behavior  
+- [ ] Commit messages are clear  
+- [ ] PR description includes context and examples  
+
+---
+
+## Thank You
+
+Whether you're improving documentation, fixing a bug, or shaping the future of the framework, your contribution is valuable.
+
+If you want guidance on good starter tasks, feel free to open an issue — we’re happy to help you get started.

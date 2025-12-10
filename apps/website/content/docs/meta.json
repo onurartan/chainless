@@ -1,0 +1,27 @@
+{
+  "title": "Framework",
+  "description": "The docs framework",
+  "icon": "Building",
+  "root": true,
+  "pages": [
+    "---Introduction---",
+    "index",
+    "installation",
+    "quickstart",
+    "what-is-chainless",
+
+    "---Concepts---",
+    "taskflow",
+    "agent",
+    "tool",
+    "flow-server",
+
+    "---Examples---",
+    "examples/support-ticket-workflow",
+    "examples/payment-issue-workflow.mdx",
+    "examples/web-analysis-flow.mdx",
+
+    "---Others---",
+    "contributing"
+  ]
+}

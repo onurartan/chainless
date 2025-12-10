@@ -1,0 +1,209 @@
+---
+title: Web Analysis Workflow with Tools, Agents and Structured Output
+description: A complete example showing how to build an autonomous website analysis workflow using Chainless. This example demonstrates tool integration, structured LLM outputs, TaskFlow orchestration and screenshot/HTML extraction using Playwright.
+---
+
+In this example, we build a **website analysis pipeline** powered by:
+
+- Tools for **HTML fetching** and **browser screenshot capturing**
+- An AI Agent that analyzes the website using DeepSeek
+- A **structured output model** (`WebSiteAnalysisResponse`)
+- A TaskFlow that orchestrates the full workflow
+
+This example replicates a real-world automated **web intelligence / site audit** workflow.
+
+---
+
+## 📦 Project Structure
+
+```
+
+.
+├── main.py
+└── types.py   # contains WebSiteAnalysisResponse model
+
+```
+
+---
+
+## 🧩 Response Model (types.py)
+
+This model defines the structured output the agent must return.
+
+```python
+from pydantic import BaseModel
+from typing import List, Optional
+
+
+class SocialLinks(BaseModel):
+    twitter: Optional[str] = None
+    instagram: Optional[str] = None
+    email: Optional[str] = None
+
+
+class SEOInfo(BaseModel):
+    canonical_url: Optional[str] = None
+    robots: Optional[str] = None
+    open_graph: bool = False
+    twitter_cards: bool = False
+    structured_data: bool = False
+
+
+class WebAnalysis(BaseModel):
+    site_name: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    technology: Optional[str] = None
+    theme: Optional[str] = None
+    key_features: List[str] = []
+    social_links: Optional[SocialLinks] = None
+    author: Optional[str] = None
+    analytics: List[str] = []
+    seo: Optional[SEOInfo] = None
+
+
+class WebSiteAnalysisResponse(BaseModel):
+    screenshot_path: Optional[str] = None
+    analysis: Optional[WebAnalysis] = None
+```
+
+---
+
+## 🧠 Full Example Code (main.py)
+
+```python
+from chainless import Tool, Agent, TaskFlow
+from chainless.models import ModelNames
+from dotenv import load_dotenv
+
+import requests
+from playwright.sync_api import sync_playwright
+
+from .types import WebSiteAnalysisResponse
+
+load_dotenv()
+
+# ----------------------------
+# Tools
+# ----------------------------
+
+def fetch_html(url: str) -> str:
+    res = requests.get(url)
+    res.raise_for_status()
+    return res.text
+
+html_tool = Tool(
+    name="HTMLFetcher",
+    description="Fetch HTML content from a URL",
+    func=fetch_html
+)
+
+def take_screenshot(url: str) -> str:
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, wait_until="networkidle")
+        path = "screenshot.png"
+        page.screenshot(path=path)
+        browser.close()
+        return path
+
+screenshot_tool = Tool(
+    name="ScreenshotTaker",
+    description="Take screenshot of the URL",
+    func=take_screenshot
+)
+
+# ----------------------------
+# Agent
+# ----------------------------
+
+agent = Agent(
+    name="WebAnalyzerAgent",
+    model=ModelNames.DEEPSEEK_CHAT,
+    tools=[html_tool, screenshot_tool],
+    response_format=WebSiteAnalysisResponse,
+    system_prompt=(
+        "You are a web analysis assistant.\n"
+        "You may call the tools HTMLFetcher and ScreenshotTaker.\n"
+        "Extract semantic information from the website.\n"
+        "Return structured output strictly following WebSiteAnalysisResponse."
+    )
+)
+
+# ----------------------------
+# TaskFlow
+# ----------------------------
+
+flow = TaskFlow(name="SmartWebAnalysis", verbose=True)
+flow.add_agent("web_agent", agent)
+
+flow.step("web_agent", {"input": "{{input}}"})
+
+# ----------------------------
+# Run the Example
+# ----------------------------
+
+if __name__ == "__main__":
+    url = "https://www.movixar.com"
+    result = flow.run(url)
+    print("Final Agent Output:")
+    print(result.output)
+```
+
+---
+
+## 🚀 How to Run
+
+Install Playwright browsers (once):
+
+```bash
+playwright install
+```
+
+Then run the example:
+
+```bash
+uv run main.py
+```
+
+Expected output:
+
+* `screenshot.png` file created
+* Structured JSON containing:
+
+  * site metadata
+  * seo info
+  * detected features
+  * screenshot path
+
+---
+
+## 🧠 What This Example Demonstrates
+
+### ✔ Tools for website data acquisition
+
+HTML scraping + Screenshot generation.
+
+### ✔ LLM reasoning with external tool calls
+
+DeepSeek automatically decides when to call tools.
+
+### ✔ Structured output validation
+
+Agent output always conforms to `WebSiteAnalysisResponse`.
+
+### ✔ Complete TaskFlow orchestration
+
+Simple and production-friendly.
+
+---
+
+## 🧩 Ideal Use Cases
+
+* SEO auditing
+* Site profiling
+* Competitive website intelligence
+* AI web crawlers
+* Automated content analysis
