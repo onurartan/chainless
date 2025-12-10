@@ -1,0 +1,267 @@
+$#agentx_version = 0.0.1
+$#auto_run=true
+
+# --------------------------------------------
+#  IMPORT Tools, Agent and Modules
+# --------------------------------------------
+
+# -- versionx is one of the core libraries for agentx. It allows you to create a structure that facilitates version changes (NOTE: it can also work without an agent).
+$from_agentx.versionx.base (
+    "VersionxBase",
+    # -- "VersionxAgent",
+)
+
+$from_agentx.agent.tools (
+    "DiffAnalyzerTool",
+    "VersionIntegrityChecker",
+    "SemanticVersionValidator",
+    "CodeBlockExtractor",
+    "ChangedRegionInspector",
+    "TomlVersionUpdater",
+    "PythonVersionUpdater",
+    "CodeRefactorSafetyTool",
+    "ProjectStructureScanner"
+)
+
+# -- It works as follows: from_exts.extension_name... This enables you to use agentx extensions.
+$from_exts.agentx_agents.* (
+
+     # -- CodeAutomationAgent is an agent that allows you to perform other tasks besides code versioning. For example, it can enable you to run a code you provide to it. 
+    "CodeAutomationAgent"
+)
+
+$from_exts.testgen.base (
+    "TestGeneratorBase"
+)
+$from_exts.testgen.tools (
+    "PytestTemplateBuilder",
+    "FunctionSignatureParser",
+    "TestCaseSynthesizer",
+    "CoverageGapDetector",
+    "AsyncTestWrapper",
+    "MockObjectGenerator",
+    "TestSafetyValidator"
+)
+
+# -- Typenv is a new alternative format to .env. If you want to retrieve keys from .env or if you are using .envx, this extension is recommended (since AGENTX is a type-safe language, using .envx is recommended).
+# -- if use .env file
+$from_exts.typenv.env (
+    "getEnv"
+)
+
+# -- if use .envx file
+# -- $from_exts.typenv.envx (
+# --     "getEnvx"
+# -- )
+
+ENV -> &getEnv("ENV", "dev")
+
+
+# --------------------------------------------
+#  Version Definitions
+# --------------------------------------------
+APP_NAME -> "chainless"
+VERSION  -> 0.2.0
+
+VERSION_OBJECTS [
+    {
+        file_path   = "./src/chainless/config.py",
+        version     = $VERSION,
+        version_type= "in_code",
+        version_var = "__version__",
+        code_lang   = "python"
+    },
+    {
+        file_path   = "./src/chainless/exp/server/types.py",
+        version     = $VERSION,
+        version_type= "in_code.class",
+        version_var = "FlowServerConfig.version",
+        code_lang   = "python"
+    },
+    {
+        file_path   = "./pyproject.toml",
+        version     = $VERSION,
+        version_type= "in_code",
+        version_var = "version",
+        code_lang   = "toml"
+    }
+]
+
+
+VERSIONX -> &VersionxBase(
+    app_name = $APP_NAME,
+    version  = $VERSION,
+    version_objects = $VERSION_OBJECTS,
+)
+
+
+# --------------------------------------------
+#  Agents
+# --------------------------------------------
+AGENT CODE_CHECKER_AGENT() {
+    active  = true,
+    agent_name  = "CodeCheckerAgent",
+    provider= "gemini",
+    model   = "gemini-2.0-flash",
+    api_key =  &getEnv("GEMINI_API_KEY"),
+
+    role="You are a code versioning agent. Your task is to ensure that the VERSIONS are changed correctly and without errors, and to guarantee that changed regions do not corrupt the project's structure or logic in new versions.",
+    instructions="""
+        You are a code versioning agent. Your task is to ensure that the VERSIONS are changed correctly and without errors, and to guarantee that changed regions do not corrupt the project's structure or logic in new versions.
+        You should use the tools provided to you to perform this task.
+    """,
+
+    prompt = """
+        The purpose is to ensure that the VERSIONS are changed correctly and 
+        without errors, and to guarantee that changed regions do not corrupt 
+        the project's structure or logic in new versions.
+    """,
+
+    tools = [
+        "DiffAnalyzerTool",
+        "VersionIntegrityChecker",
+        "SemanticVersionValidator",
+        "CodeBlockExtractor",
+        "ChangedRegionInspector",
+        "TomlVersionUpdater",
+        "PythonVersionUpdater",
+        "CodeRefactorSafetyTool",
+        "ProjectStructureScanner"
+    ]
+}
+
+
+AGENT README_CHANGER_AGENT(CodeAutomationAgent) {
+
+    # -- DEFAULT AGENT CONFIGS
+    active  = true,
+    agent_name  = "READMEChangerAgent",
+    provider= "gemini",
+    model   = "gemini-2.0-flash",
+    api_key =  &getEnv("GEMINI_API_KEY")
+
+
+    # -- CodeAutomationAgent CONFIGS
+    one_file_mode=true,
+    file="README.md"
+    role="When the documents change, you should update the README.md file with the new information without altering its structure or overall layout.",
+    instructions="""
+   When the docs you need to work on change, you should update the important sections in README.md. For example, if only code changes were made, you don't need to edit README.md. But if, for example, agent usage was changed or new additions were made, and the example in README.md is no longer valid and could cause incorrect usage by the developer, then you should edit the README. md file according to these rules.
+    
+   IMPORTANT:
+    Do not alter the current structure of README.md or change the way it is written.
+    """
+    watch_folders=["apps/website", "src/chainless"]
+    source_folders=[{
+        main=true,
+        source_name="docs",
+        folder_path="apps/website/content/docs",
+        sources_data_types=["mdx", "md"]
+    }]
+
+}
+
+
+&test_output_dir(env string) string {
+    dev  -> "tests/dev_generated"
+    prod -> "tests/"
+    return env == "prod" ? $prod : $dev
+}
+
+AGENT TEST_GEN_AGENT(TestGeneratorBase) {
+
+    # --- DEFAULTS FROM TestGeneratorBase ---
+    active   = true
+    agent_name = "TestGenAgent",
+    provider = "gemini"
+    model    = "gemini-2.0-flash"
+    api_key =  &getEnv("GEMINI_API_KEY")
+
+    # --- TEST_GEN custom configs ---
+    framework       = "pytest"
+    min_coverage    = 0.80
+    async_support   = true
+    overwrite_tests = false
+    style           = "deterministic"  # -- deterministic | exploratory
+
+    ignore_if_unchanged = true
+
+    # -------------------------------------
+    # Source watching & filtering
+    # -------------------------------------
+    watch_folders = [
+        "src",
+    ]
+
+    include = [
+        "src/**/*.py",
+    ]
+
+    exclude = [
+         "**/__pycache__/**",
+    ]
+
+    output = {
+        dir        = &test_output_dir($ENV)
+        file_mode   = "split",
+        name_format = "test_{module}.py"
+    }
+
+    role = """
+    You are an advanced automated test generator that produces clean,
+    deterministic pytest test suites for Python code updates.
+    """
+
+    instructions = """
+    - Analyze changed source code and detect functions requiring new tests.
+    - Use FunctionSignatureParser to extract expected inputs and behavior.
+    - Use TestCaseSynthesizer to generate realistic, deterministic test cases.
+    - NEVER alter user source code.
+    - Only generate test files inside tests/generated folder.
+    - If overwrite_tests=false and file exists, append new tests.
+    - Wrap async functions using AsyncTestWrapper.
+    - Validate test safety with TestSafetyValidator.
+    - only taskflow examples and make all chainless exampels with mocks agents use on_start
+    """
+
+    tools = [
+        "PytestTemplateBuilder",
+        "FunctionSignatureParser",
+        "TestCaseSynthesizer",
+        "CoverageGapDetector",
+        "AsyncTestWrapper",
+        "MockObjectGenerator",
+        "TestSafetyValidator"
+    ]
+}
+
+# --------------------------------------------
+# -- Agents: AI-driven, autonomous units capable of executing tasks independently.
+# -- These are interactive and may require runtime decision-making or prompts.
+AGENTS [
+    CODE_CHECKER_AGENT,
+    README_CHANGER_AGENT,
+    TEST_GEN_AGENT,
+]
+
+# --------------------------------------------
+# -- Modules: Passive, non-AI units that perform specific utility tasks.
+# -- Unlike Agents, these do not make autonomous decisions; they provide functionality on demand.
+MODULES [
+    VERSIONX
+]
+
+RUNNER Runner (
+    agents = $AGENTS,
+    modules  = $MODULES,
+    mode = "daemon" # -- daemon | once
+)
+
+Runner.set_log_level(level=RUNNER.LogLevels.Debug)
+Runner.set_log_file("agentx/agentx.log")
+
+Runner.agents.set_cache_mode("sqlite", path="agentx/agents_cache.db", vector=true)
+
+if $ENV == "dev" {
+    Runner.run()
+}

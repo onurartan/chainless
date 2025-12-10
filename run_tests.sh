@@ -17,6 +17,11 @@ header() {
 run_examples() {
   header "Running Examples (examples/*.py)"
   for file in examples/*.py; do
+    if [[ "$file" == "examples/eserver.py" ]]; then
+      echo -e "⏭️ Skipping: ${file}"
+      continue
+    fi
+    
     echo -e "▶️ Running: ${file}"
     uv run  "$file"
     status=$?
@@ -44,7 +49,7 @@ run_tests() {
 main() {
   echo -e "${BOLD}🚀 Starting Full Run with uv...${NC}"
   divider
-#   run_examples 
+  # run_examples 
   run_tests
   divider
   echo -e "${GREEN}🏁 All steps completed successfully.${NC}"

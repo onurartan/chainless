@@ -1,0 +1,83 @@
+import { TrymagicLogo_icon } from "@/constants/icons";
+import { SvgProps } from "@/types";
+import { cn } from "fumadocs-ui/utils/cn";
+import React from "react";
+
+export const LogoSvg: React.FC<SvgProps> = ({
+  size = 512,
+  width = 512,
+  height = 512,
+  ...props
+}) => {
+  return (
+    <svg
+      width={size ?? width}
+      height={size ?? height}
+      viewBox="0 0 512 512"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+<rect width="512" height="512" fill="#181818"/>
+<path d="M281.845 83.2992C267.059 74.8235 248.888 74.8235 234.102 83.2992L223.306 89.488L128.844 143.926L118.304 149.968C103.381 158.523 94.1758 174.409 94.1758 191.611V324.355C94.1758 341.557 103.381 357.443 118.304 365.998L128.844 372.04L224.172 426.478L234.968 432.667C249.754 441.143 267.925 441.143 282.711 432.667L293.508 426.478L387.104 372.04L397.643 365.998C412.567 357.443 421.772 341.557 421.772 324.355V191.611C421.772 174.409 412.567 158.523 397.643 149.968L387.104 143.926L292.642 89.488L281.845 83.2992ZM151.615 326.721C138.557 317.771 130.752 302.959 130.752 287.128V228.838C130.752 213.007 138.557 198.195 151.615 189.245L230.837 134.946C247.192 123.737 268.756 123.737 285.111 134.946L364.333 189.245C377.391 198.195 385.196 213.007 385.196 228.838V287.128C385.196 302.958 377.391 317.771 364.333 326.721L285.111 381.02C268.756 392.229 247.192 392.229 230.837 381.02L151.615 326.721Z" fill="url(#paint0_linear_8849_362)"/>
+<path d="M319.407 192.465H196.559V319.979H319.407V293.543H229.215V223.566H274.311H319.407V192.465Z" fill="url(#paint1_linear_8849_362)"/>
+<defs>
+<linearGradient id="paint0_linear_8849_362" x1="94.1758" y1="69.6152" x2="481.004" y2="370.098" gradientUnits="userSpaceOnUse">
+<stop stopColor="#F9E1FF"/>
+<stop offset="1" stopColor="#00C2FF"/>
+</linearGradient>
+<linearGradient id="paint1_linear_8849_362" x1="196.559" y1="192.465" x2="330.179" y2="307.462" gradientUnits="userSpaceOnUse">
+<stop stopColor="#F9E1FF"/>
+<stop offset="1" stopColor="#00C2FF"/>
+</linearGradient>
+</defs>
+    </svg>
+  );
+};
+
+const Logo = ({
+  iconSize = 30,
+  withPng = false,
+}: {
+  iconSize?: number;
+  withPng?: boolean;
+}) => {
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      {withPng ? (
+        <img className="" src={"/logo.png"} width={iconSize} height={iconSize} />
+      ) : (
+        <LogoSvg size={iconSize} className="border border-[#464646] rounded-lg" />
+      )}
+      <p>Chainless</p>
+    </div>
+  );
+};
+
+const TrymagicLogo = ({
+  size = 100,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}) => {
+  return (
+    <div
+      className={cn(
+        "bg-white dark:bg-[#2a2a2a] border border-[#DDDDDD] dark:border-[#2e2e2e] py-1.5 px-2 rounded-2xl flex items-center gap-1.5",
+        className
+      )}
+    >
+      <TrymagicLogo_icon size={25} rounded={10} />
+      <p
+        className="text-[13px] text-[#7E7E7E] dark:text-[#bcbcbc] font-medium"
+        style={{}}
+      >
+        Trymagic
+      </p>
+    </div>
+  );
+};
+
+export { TrymagicLogo };
+export default Logo;

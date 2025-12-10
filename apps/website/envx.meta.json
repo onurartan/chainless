@@ -1,0 +1,42 @@
+{
+  "DEVELOPER_MESSAGE": {
+    "type": "string",
+    "required": true
+  },
+  "PROD_BASE_URL": {
+    "type": "url",
+    "required": true
+  },
+  "NODE_ENV": {
+    "type": "string",
+    "required": false
+  },
+  "DEV_MODE": {
+    "type": "string",
+    "required": false
+  },
+  "GITHUB_REPO_NAME": {
+    "type": "string",
+    "required": false
+  },
+  "GITHUB_REPO_USERNAME": {
+    "type": "string",
+    "required": false
+  },
+  "GITHUB_REPO_URL": {
+    "type": "string",
+    "required": false
+  },
+  "TRYMAGIC_URL": {
+    "type": "string",
+    "required": false
+  },
+  "BASE_URL": {
+    "type": "string",
+    "required": false
+  },
+  "CHAINLESS_TEXT": {
+    "type": "string",
+    "required": false
+  }
+}

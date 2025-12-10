@@ -1,112 +1,105 @@
 from chainless import Tool, Agent, AgentProtocol, TaskFlow
+from chainless.schemas.context import AgentProtocolRunContext
+
+from chainless.models import ModelNames
 from pydantic import BaseModel, Field
 
 
-from langchain_deepseek import ChatDeepSeek
-from dotenv import load_dotenv
-
-from langchain.prompts import ChatPromptTemplate
-
-load_dotenv()
-
-
+# ------------------------------------------------------------
+# Models
+# ------------------------------------------------------------
 class SumModel(BaseModel):
-    numbers: list[int] = Field(..., description="numbers")
+    numbers: list[int] = Field(..., description="numbers to add")
 
 
-class SumAgent(BaseModel):
-    total: int = Field(..., description="result of the summed number")
+class SumResult(BaseModel):
+    total: int = Field(..., description="sum result")
 
 
+# ------------------------------------------------------------
+# Example protocol agent (manual implementation)
+# ------------------------------------------------------------
 class EchoAgent(AgentProtocol):
     name = "Echo"
 
-    def start(self, input: str, verbose: bool = False, **kwargs):
-        return {"output": f"Echoed: {input}"}
+    def run(self, ctx: AgentProtocolRunContext):
+        return {"output": f"Echoed: {ctx.input}"}
 
 
-def sum(numbers: list[int]):
-    result = 0
-    for number in numbers:
-        result += number
-    return result
+# ------------------------------------------------------------
+# Helper tool function
+# ------------------------------------------------------------
+def add_numbers(numbers: list[int]):
+    return sum(numbers)
 
 
-llm = ChatDeepSeek(model="deepseek-chat")
-
-
-def test_firs_tool():
-    sum_tool = Tool(
-        name="sumTool", description="adding numbers", func=sum, input_schema=SumModel
+# ------------------------------------------------------------
+# Test — Tool usage
+# ------------------------------------------------------------
+def test_tool():
+    tool = Tool(
+        name="sumTool",
+        description="adding numbers",
+        func=add_numbers,
+        input_schema=SumModel,
     )
 
-    result = sum_tool.execute({"numbers": [3 + 6]})
-    tool_describe = sum_tool.describe()
+    result = tool.execute({"numbers": [3, 6]})
+    info = tool.describe()
+
     assert result == 9
-    assert tool_describe["name"] == "sumTool"
-    assert tool_describe["description"] == "adding numbers"
-    assert tool_describe["parameters"]["numbers"]["type"] == "array"
+    assert info["name"] == "sumTool"
+    assert info["description"] == "adding numbers"
+    assert info["parameters"]["numbers"]["type"] == "array"
 
 
+# ------------------------------------------------------------
+# Test — Agent with a tool
+# ------------------------------------------------------------
 def test_agent():
     sum_tool = Tool(
-        name="sumTool", description="adding numbers", func=sum, input_schema=SumModel
+        name="sumTool",
+        description="adding numbers",
+        func=add_numbers,
+        input_schema=SumModel,
     )
+
     sum_agent = Agent(
         name="SumAgent",
-        llm=llm,
+        model=ModelNames.DEEPSEEK_CHAT,
         tools=[sum_tool],
-        system_prompt="adding numbers agent.",
+        system_prompt="adding numbers agent",
+        response_format=SumResult,
     )
 
-    @sum_agent.custom_start
-    def start(input: str, tools, system_prompt):
-        user_input: str = f""" 
-    {input}
-    """
-
-        model = llm
-        tools = tools
-
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system_prompt or ""),
-                ("human", "{input}"),
-            ]
-        )
-
-        model = model.with_structured_output(schema=SumAgent)
-
-        chain = prompt | model
-        result = chain.invoke(user_input)
-
-        return result
-
     @sum_agent.set_system_prompt
-    def system_prompt():
+    def override_system_prompt():
         return "agent adding numbers."
 
-    result = sum_agent.start("What is 5+6 sum tool should be used")
+    result = sum_agent.run("Sum 5 + 6 using the sum tool")
 
-    agent_descibe = sum_agent.describe()
-    tooled_agent = sum_agent.as_tool()
-    export_tools_schema = sum_agent.export_tools_schema()
+    meta = sum_agent.get_metadata()
+    exported = sum_agent.export_tools_schema()
+    as_tool = sum_agent.as_tool()
+    
 
-    assert result["output"]
-    assert result["output"].total == 11
+    assert result.output["total"] == 11
     assert sum_agent.name == "SumAgent"
-    assert agent_descibe.get("name", None) == "SumAgent"
-    assert tooled_agent.name == "SumAgent"
-    assert export_tools_schema.get("agent_name", None) == "SumAgent"
-    assert len(export_tools_schema.get("tools", 0)) == 1
+    assert meta["name"] == "SumAgent"
+    assert as_tool.name == "SumAgent"
+    assert exported["agent_name"] == "SumAgent"
+    assert len(exported["tools"]) == 1
     assert sum_agent.system_prompt == "agent adding numbers."
 
 
+# ------------------------------------------------------------
+# Test — AgentProtocol used inside TaskFlow
+# ------------------------------------------------------------
 def test_agent_protocol():
-    flow = TaskFlow(name="AgentProtocolTest")
+    flow = TaskFlow("AgentProtocolTest")
     flow.add_agent("echo", EchoAgent())
     flow.step("echo", input_map={"input": "{{input}}"})
+
     result = flow.run("hello")
 
-    assert result["output"]
-    assert result["output"] == "Echoed: hello"
+    assert result.output == "Echoed: hello"

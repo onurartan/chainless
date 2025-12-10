@@ -1,0 +1,49 @@
+# NODE_ENV variable is embedded in .envx and always takes the value of the environment it is in unless otherwise specified.
+# For example, if NODE_ENV is defined in .envx, it will take its value, otherwise NODE_ENV will take the value of the environment it is in.  
+NODE_ENV="development"
+DEV_MODE= ${NODE_ENV} == "development" ? true : false
+
+# PUBLIC ENVX VARIABLES
+GITHUB_REPO_NAME="chainless"
+GITHUB_REPO_USERNAME="onurartan"
+GITHUB_REPO_URL="https://www.github.com/${GITHUB_REPO_USERNAME}/${GITHUB_REPO_NAME}"
+
+TRYMAGIC_URL="https://www.trymagic.xyz"
+
+PROD_BASE_URL= "https://chainless.trymagic.xyz"
+BASE_URL= ${DEV_MODE} ?  "https://localhost:3000" : "${PROD_BASE_URL}"
+
+
+# SERVER ENVX VARIABLES
+DEVELOPER_MESSAGE="""
+    ▄▄▄▄   ▄▄                     ██               ▄▄▄▄                                   
+  ██▀▀▀▀█  ██                     ▀▀               ▀▀██                                   
+ ██▀       ██▄████▄   ▄█████▄   ████     ██▄████▄    ██       ▄████▄   ▄▄█████▄  ▄▄█████▄ 
+ ██        ██▀   ██   ▀ ▄▄▄██     ██     ██▀   ██    ██      ██▄▄▄▄██  ██▄▄▄▄ ▀  ██▄▄▄▄ ▀ 
+ ██▄       ██    ██  ▄██▀▀▀██     ██     ██    ██    ██      ██▀▀▀▀▀▀   ▀▀▀▀██▄   ▀▀▀▀██▄ 
+  ██▄▄▄▄█  ██    ██  ██▄▄▄███  ▄▄▄██▄▄▄  ██    ██    ██▄▄▄   ▀██▄▄▄▄█  █▄▄▄▄▄██  █▄▄▄▄▄██ 
+    ▀▀▀▀   ▀▀    ▀▀   ▀▀▀▀ ▀▀  ▀▀▀▀▀▀▀▀  ▀▀    ▀▀     ▀▀▀▀     ▀▀▀▀▀    ▀▀▀▀▀▀    ▀▀▀▀▀▀  
+                                                  
+            ${CHAINLESS_TEXT}
+
+A Lightweight Agentic Framework for Modern AI Workflows
+
+🔧 CLI Quickstart:
+    uv add chainless
+    pip install chainless
+
+📘 Docs & GitHub:  
+    ${GITHUB_REPO_URL}
+"""
+
+CHAINLESS_TEXT= "C H A I N L E S S"
+
+
+[DEVELOPER_MESSAGE]
+type="string"
+default=""
+required=true
+
+[PROD_BASE_URL]
+type="url"
+required=true

@@ -1,0 +1,9 @@
+{
+  "input": "./.envx.public",
+  "outputs": {
+    "env": "./.env.public",
+    "types": "./types/envx.ts",
+    "metaFilePath": "."
+  },
+  "overwrite": true
+}

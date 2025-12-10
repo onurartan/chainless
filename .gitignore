@@ -17,4 +17,13 @@ wheels/
 
 # Others
 .qodo
-lib_test/
+.agentx/
+# lib_test/
+
+
+# The old docs/ folder is deprecated and ignored.
+# New documentation lives in the new website/app. 
+# Do not use or re-add the old docs directory.
+docs/
+
+.vscode

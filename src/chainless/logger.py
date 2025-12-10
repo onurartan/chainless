@@ -34,7 +34,7 @@ def get_logger(name: str = "chainless", level: int = logging.INFO) -> logging.Lo
         )
 
         handler.setFormatter(
-            logging.Formatter("[#0c6eed]%(name)s [white]- %(message)s", datefmt="[%X]")
+            logging.Formatter("[#6d8cff]%(name)s [white]- %(message)s", datefmt="[%X]")
         )
         logger.addHandler(handler)
         logger.propagate = False

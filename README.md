@@ -1,29 +1,21 @@
-# Chainless 🧠 – A Minimalistic Framework for Agentic Workflows
+# Chainless – A Lightweight Agentic Framework for Modern AI Workflows
 
-**Chainless** is a lightweight, extensible framework for building agent-based systems on top of large language models (LLMs). Designed to be modular, composable, and developer-friendly, Chainless provides an intuitive abstraction layer over LangChain and similar LLM orchestration libraries.
+Chainless is a minimalistic, modular framework for building powerful agent workflows and tool-augmented  systems.
+It focuses on simplicity, composability, and clarity while enabling advanced multi-agent orchestration without unnecessary complexity.
 
----
-
-## Overview
-
-Chainless introduces three core primitives:
-
-- **Tool** – Wraps callable functions with structured metadata
-- **Agent** – Manages reasoning, tool execution, and LLM interactions
-- **TaskFlow** – Enables orchestrated multi-step workflows with sequential or parallel logic
-
-Whether you're building AI assistants, workflow chains, or multi-agent environments, Chainless gives you the control and simplicity to iterate fast.
+Chainless gives you the building blocks to create intelligent systems that can reason, execute functions, work in steps, and run as production-ready services.
 
 ---
 
-## Key Features
+## Why Chainless?
 
-- 🧩 Modular design – Agents and tools are decoupled and reusable
-- ⚙️ LangChain-compatible – Use any `BaseChatModel` and native LangChain tools
-- 🔁 Supports sequential and parallel task execution
-- 🧠 Customizable prompts and reasoning flows via decorators
-- 🛠 Minimal dependencies and simple integration
-- ✅ Typed, testable, and developer-centric
+* Simple design with **zero overhead**
+* Fully typed and developer friendly
+* Clean abstraction for tools, agents, and workflows
+* Built-in **TaskFlow** for orchestrated multi-step logic
+* Native support for **async tools**, **structured outputs**, and **custom prompts**
+* Built-in **FlowServer** for serving flows as HTTP endpoints
+* Works with any major  provider (OpenAI, Gemini, Anthropic)
 
 ---
 
@@ -33,194 +25,210 @@ Whether you're building AI assistants, workflow chains, or multi-agent environme
 pip install chainless
 ```
 
-> Note: Chainless requires LangChain and an LLM provider (e.g., OpenAI, Anthropic). Make sure to configure credentials as needed.
+You only need to configure your preferred  provider (OpenAI, Gemini, Anthropic, etc.)
 
 ---
 
-## 📘 Usage Examples
+# Core Concepts
 
-Below are a few examples of how to use **Chainless** in increasing complexity.
+Chainless provides three core primitives that everything else builds on.
+
+**Tool**: A function callable by an agent. Tools can be sync or async.
+
+**Agent**: A reasoning unit that interacts with an , uses tools, applies prompts, and produces structured outputs.
+
+**TaskFlow**: Whether you're building AI assistants, workflow chains, or multi-agent environments, Chainless gives you the control and simplicity to iterate fast.
 
 ---
 
-### 🔹 Example 1: Simple Tool Call via Agent
+# Quick Start Examples
+
+Below are updated examples that reflect the current design of Chainless.
+
+---
+
+## Example 1: A Simple Agent with a Tool
 
 ```python
-from chainless import Tool, Agent
-from langchain_openai import ChatOpenAI
+from chainless import Agent, Tool
 
-# Define a simple tool
-reverse_tool = Tool("Reverser", "Reverses a string", lambda input: input[::-1])
+@Tool.tool(name="add", description="Adds two numbers.")
+def add(a: int, b: int) -> int:
+    return a + b
 
-# Set up LLM
-llm = ChatOpenAI()
-
-# Create agent
 agent = Agent(
-    name="SimpleReverser",
-    llm=llm,
-    tools=[reverse_tool],
-    system_prompt="Use the Reverser tool to reverse the input string."
+    name="MathAgent",
+    system_prompt="Use tools when needed to solve math problems.",
+    tools=[add]
 )
 
-# Run agent
-response = agent.start("Hello world")
-print(response["output"])
+result = agent.run("Please add 5 and 7.")
+print(result.output)
 ```
 
 ---
 
-### 🔸 Example 2: Parallel Tool Usage in a TaskFlow
+## Example 2: Agents With Structured Outputs
 
 ```python
-from chainless import Tool, Agent, TaskFlow
-
-# Define tools
-wiki_tool = Tool("WikiTool", "Searches Wikipedia", lambda q: f"Wikipedia info: {q}")
-yt_tool = Tool("YTTool", "Fetches YouTube transcript", lambda q: f"Transcript of {q}")
-
-# Create agents
-wiki_agent = Agent("WikipediaAgent", llm=llm, tools=[wiki_tool])
-yt_agent = Agent("YouTubeAgent", llm=llm, tools=[yt_tool])
-
-# Build TaskFlow
-flow = TaskFlow("ParallelSearch")
-
-flow.add_agent("WikipediaAgent", wiki_agent)
-flow.add_agent("YouTubeAgent", yt_agent)
-
-flow.step("WikipediaAgent", input_map={"input": "{{input}}"})
-flow.step("YouTubeAgent", input_map={"input": "{{input}}"})
-
-flow.parallel(["WikipediaAgent", "YouTubeAgent"])
-
-result = flow.run("Artificial Intelligence")
-print(result)
-```
-
----
-
-### 🟠 Example 3: Custom Reasoning with a Summarizer Agent
-
-```python
+from pydantic import BaseModel
 from chainless import Agent
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
 
-llm = ChatOpenAI(model="gpt-4o")
+class Info(BaseModel):
+    title: str
+    summary: str
 
-summary_agent = Agent(
+agent = Agent(
     name="Summarizer",
-    llm=llm,
-    system_prompt="Summarize input in 2 sentences."
+    system_prompt="Extract a title and a short summary.",
+    response_format=Info
 )
 
-@summary_agent.custom_start
-def start(input: str, tools, system_prompt):
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("human", "{input}")
-    ])
-    chain = llm | prompt
-    return chain.invoke(input)
-
-result = summary_agent.start("Chainless is a lightweight agentic orchestration library...")
-print(result["output"])
+res = agent.run("Python is a programming language created by Guido van Rossum.")
+print(res.output["title"], res.output["summary"])
 ```
 
 ---
 
-### 🔴 Example 4: Multi-Agent TaskFlow with Conditional Data Routing
+## Example 3: Multi Step Workflow Using TaskFlow
 
 ```python
-from chainless import TaskFlow
+from chainless import Agent, TaskFlow
 
-# Reuse wiki_agent, yt_agent, summary_agent from previous examples
-report_agent = Agent(
-    name="Reporter",
-    llm=llm,
-    system_prompt="""
-    Combine the given summaries into a JSON report:
-    {
-      "topic": ...,
-      "wikipedia": ...,
-      "youtube": ...
-    }
-    """
+classifier = Agent(
+    name="Classifier",
+    system_prompt="Classify the topic of the text into categories."
 )
 
-@report_agent.custom_start
-def start(wikipedia_ozet: str, youtube_ozet: str, tools, system_prompt):
-    content = f"Wikipedia: {wikipedia_ozet}nYouTube: {youtube_ozet}"
-    return llm.invoke(content)
+summarizer = Agent(
+    name="Summarizer",
+    system_prompt="Summarize the input in two sentences."
+)
 
-flow = TaskFlow("MultiModalSummarization")
+flow = TaskFlow("TextProcessingFlow")
 
-flow.add_agent("WikipediaAgent", wiki_agent)
-flow.add_agent("YouTubeAgent", yt_agent)
-flow.add_agent("WikiSummary", summary_agent)
-flow.add_agent("YouTubeSummary", summary_agent)
-flow.add_agent("Reporter", report_agent)
+flow.add_agent("Classifier", classifier)
+flow.add_agent("Summarizer", summarizer)
 
-flow.step("WikipediaAgent", input_map={"input": "{{input}}"})
-flow.step("YouTubeAgent", input_map={"input": "{{input}}"})
-flow.parallel(["WikipediaAgent", "YouTubeAgent"])
+flow.step("Classifier", input_map={"input": "{{input}}"})
+flow.step("Summarizer", input_map={"input": "{{Classifier.output}}"})
 
-flow.step("WikiSummary", input_map={"input": "{{WikipediaAgent.output.output}}"})
-flow.step("YouTubeSummary", input_map={"input": "{{YouTubeAgent.output.output}}"})
-
-flow.step("Reporter", input_map={
-    "wikipedia_ozet": "{{WikiSummary.output}}",
-    "youtube_ozet": "{{YouTubeSummary.output}}"
-})
-
-output = flow.run("Quantum Computing")
-print(output["output"]["content"])
+result = flow.run("Quantum computing uses qubits to represent information.")
+print(result.flow.steps["Summarizer"].output)
+# OR
+print(result.output)
 ```
 
 ---
 
-## Architecture
+## Example 4: Using Tools Inside a TaskFlow Step
 
-Chainless follows a simple but powerful pattern:
+```python
+from chainless import Agent, TaskFlow, Tool
 
-- **Tool**: Smallest executable unit. Synchronous, stateless.
-- **Agent**: Wraps an LLM and optionally calls tools. Supports custom reasoning logic.
-- **TaskFlow**: Manages execution of agents in steps, supports references, retries, and callbacks.
+@Tool.tool(name="temperature", description="Returns the current system temperature.")
+def get_temp():
+    return 42
 
-The framework is ideal for:
+agent = Agent(
+    name="DiagnosticAgent",
+    tools=[get_temp],
+    system_prompt="Check system temperature and provide a health report."
+)
 
-- Custom LLM agents with tool use
-- Multi-step conversational agents
-- Parallel agent execution
-- Complex logic workflows without DAG complexity
+flow = TaskFlow("DiagnosticsFlow")
+flow.add_agent("Diag", agent)
+flow.step("Diag", input_map={"input": "{{input}}"})
 
----
-
-
-## Roadmap
-
-- ✅ Decorator-based agent customization
-- ✅ Async tool support
-- ⏳ Built-in memory support
-- ⏳ CLI for flow testing
+print(flow.run("status"))
+```
 
 ---
 
-## Contributing
+## Example 5: Serve A Flow With FlowServer
 
-We welcome contributions from the community. If you have ideas, bug reports, or suggestions, please open an issue or a pull request.
+```python
+from chainless import Agent, TaskFlow
+from chainless.exp.server import FlowServer
 
-For larger changes, please open a discussion first.
+agent = Agent(
+    name="EchoAgent",
+    system_prompt="Repeat the user input."
+)
+
+flow = TaskFlow("EchoFlow")
+flow.add_agent("Echo", agent)
+flow.step("Echo", input_map={"input": "{{input}}"})
+
+endpoint = flow.serve("/echo", name="Echo Service")
+server = FlowServer(endpoints=[endpoint], port=8000, api_key="demo")
+
+if __name__ == "__main__":
+    server.run()
+```
+
+You now have a production-ready API that runs your agents as HTTP services.
 
 ---
 
-## License
+# Architecture Overview
 
-This project is licensed under the MIT License.
+Chainless follows a clear, minimal architecture.
+
+### Tool
+
+* Smallest executable unit
+* Sync or async
+* Perfect for integrating external APIs, local logic, or computation
+
+### Agent
+
+* Contains an 
+* Uses tools strategically
+* Supports structured outputs
+* Can apply custom hooks and decorators
+* Produces deterministic structured reasoning
+
+### TaskFlow
+
+* Multi agent orchestration
+* Step by step execution
+* Parallel execution supported
+* Input and output mapping with templates
+* Ideal for building complex flows from simple components
+
+### FlowServer
+
+* Serve flows as HTTP APIs
+* Automatic input validation
+* API key support
+* Easy deployment
 
 ---
 
-## Authors
+# Roadmap
 
-Maintained by Onur Artan / Trymagic. Inspired by LangChain’s ecosystem and the need for leaner abstraction models in agentic applications.
+* Improved memory system (in progress)
+* Tracing and monitoring tools
+* Flow visualization
+* CLI for easier testing
+* Built in agent simulator
+
+---
+
+# Contributing
+
+Contributions are welcome.
+Before submitting large changes or proposals, please open a discussion.
+
+---
+
+# License
+
+MIT License.
+
+---
+
+# Authors
+
+Created and maintained by **Onur Artan / Trymagic**.
