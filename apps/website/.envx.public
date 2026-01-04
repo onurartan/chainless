@@ -1,6 +1,6 @@
 # NODE_ENV variable is embedded in .envx and always takes the value of the environment it is in unless otherwise specified.
 # For example, if NODE_ENV is defined in .envx, it will take its value, otherwise NODE_ENV will take the value of the environment it is in.  
-NODE_ENV="development"
+NODE_ENV="production"
 DEV_MODE= ${NODE_ENV} == "development" ? true : false
 
 # PUBLIC ENVX VARIABLES
